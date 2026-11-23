@@ -1,3 +1,4 @@
+#include "AddressCheck.h"
 #include "ConsolePanel.h"
 #include "Settings.h"
 
@@ -9,6 +10,9 @@ namespace
 			return;
 		}
 
+		if (!MIC::Address::Get().core) {
+			return;  // already logged; leave the game untouched
+		}
 		const auto* tasks = SFSE::GetTaskInterface();
 		if (!tasks) {
 			REX::ERROR("SFSE task interface unavailable; the console panel is disabled");
@@ -26,6 +30,12 @@ SFSE_PLUGIN_LOAD(const SFSE::LoadInterface* a_sfse)
 
 	REX::INFO("{} {} loading", SFSE::GetPluginName(), SFSE::GetPluginVersion().string());
 	MIC::Settings::Get().Load();
+
+	// Check every Address Library ID up front, so a missing one disables a feature instead of
+	// ending the game. If the panel's own IDs are missing, the plugin loads but does nothing.
+	if (!MIC::Address::Get().core) {
+		return true;
+	}
 
 	const auto* messaging = SFSE::GetMessagingInterface();
 	if (!messaging || !messaging->RegisterListener(OnMessage)) {

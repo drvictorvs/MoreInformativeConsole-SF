@@ -1,5 +1,6 @@
 #include "ConsolePanel.h"
 
+#include "AddressCheck.h"
 #include "FormInfo.h"
 #include "Settings.h"
 
@@ -252,7 +253,7 @@ namespace MIC::ConsolePanel
 				}
 			}
 
-			if (settings.printToConsole) {
+			if (settings.printToConsole && Address::Get().consolePrint) {
 				PrintToConsole(id, ref);
 			}
 
@@ -317,6 +318,9 @@ namespace MIC::ConsolePanel
 
 	void OnFrame()
 	{
+		if (!Address::Get().core) {
+			return;  // never registered in that case; this is a second guard
+		}
 		auto& state = GetState();
 		++state.frame;
 

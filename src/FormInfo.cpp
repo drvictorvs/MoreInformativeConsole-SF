@@ -1,5 +1,6 @@
 #include "FormInfo.h"
 
+#include "AddressCheck.h"
 #include "Settings.h"
 
 namespace MIC
@@ -141,6 +142,9 @@ namespace MIC
 			return "(created in save)";
 		}
 
+		if (!Address::Get().dataHandler) {
+			return {};
+		}
 		auto* handler = RE::TESDataHandler::GetSingleton();
 		if (!handler) {
 			return {};
@@ -166,7 +170,9 @@ namespace MIC
 			return sections;
 		}
 
-		RE::TESBoundObject* base = a_ref->GetBaseObject().get();
+		// Read the base object without copying the NiPointer: a copy's destructor would call
+		// TESForm::DecRefCount, one more engine function to depend on.
+		RE::TESBoundObject* base = a_ref->data.objectReference.get();
 
 		if (settings.showReference) {
 			InfoSection ref{ "Reference", {} };
@@ -211,11 +217,6 @@ namespace MIC
 					sec.lines.push_back({ "Race", Describe(race) });
 					sec.lines.push_back({ "Race from", DefiningFileName(race->GetFormID()) });
 				}
-				if (auto* npc = actor->GetNPC()) {
-					if (!base || npc->GetFormID() != base->GetFormID()) {
-						sec.lines.push_back({ "NPC", Describe(npc) });
-					}
-				}
 				if (!sec.lines.empty()) {
 					sections.push_back(std::move(sec));
 				}
@@ -226,13 +227,19 @@ namespace MIC
 			InfoSection sec{ "Position", {} };
 			sec.lines.push_back({ "Position", Point(a_ref->GetPosition()) });
 			sec.lines.push_back({ "Rotation", Point(a_ref->GetAngle(), kRadToDeg) + " deg" });
-			sec.lines.push_back({ "Scale", std::format("{:.2f}", a_ref->GetScale()) });
+			// TESObjectREFR::GetScale has no Address Library ID for 1.16.244 in this CommonLibSF
+			// fork (calling it aborts the game), so read the stored value: hundredths, 100 = 1.0.
+			if (const auto rawScale = a_ref->scale; rawScale > 0 && rawScale <= 10000) {
+				sec.lines.push_back({ "Scale", std::format("{:.2f}", rawScale / 100.0) });
+			}
 			if (auto* cell = a_ref->parentCell) {
 				sec.lines.push_back({ "Cell", std::format("{}{}", Describe(cell), cell->IsInterior() ? "  interior" : "  exterior") });
 				sec.lines.push_back({ "Cell from", DefiningFileName(cell->GetFormID()) });
 			}
-			if (auto* location = a_ref->GetCurrentLocation()) {
-				sec.lines.push_back({ "Location", Describe(location) });
+			if (Address::Get().location) {
+				if (auto* location = a_ref->GetCurrentLocation()) {
+					sec.lines.push_back({ "Location", Describe(location) });
+				}
 			}
 			sections.push_back(std::move(sec));
 		}

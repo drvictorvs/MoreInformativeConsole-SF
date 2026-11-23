@@ -4,12 +4,12 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 
 - **Reference:** name, ref ID and type, editor ID, the plugin that defines it, the plugin that last changed it, and flags (persistent, disabled, deleted, created in game).
 - **Base object:** name, base ID and type, editor ID, defining and last-changing plugins, model path.
-- **Actor:** race (and the plugin it comes from), and the NPC record when it differs from the base.
+- **Actor:** race, and the plugin it comes from.
 - **Position:** coordinates, rotation in degrees, scale, cell (interior or exterior, and its plugin), location.
 
 Optionally, the same text can also be printed into the console history (`bPrintToConsole`).
 
-Status: 0.1.0, **not yet compiled or run in game.** Expect a round of fixes.
+Status: 0.1.1, not yet confirmed in game. 0.1.0 stopped the game with an Address Library error because it called `TESObjectREFR::GetScale`, whose ID is a 0 placeholder in this CommonLibSF fork. 0.1.1 reads the stored scale instead, and adds the safety check below.
 
 ## How it works (and how it differs from the Skyrim mod)
 
@@ -18,6 +18,23 @@ Skyrim's MIC ships a replacement `console.swf` (ActionScript 2) that calls funct
 1. **Which reference is selected.** The game writes the selection into the console's `CurrentSelection` text field (through the SWF's `currentSelection` setter). The plugin reads that text and takes the form ID from it, e.g. `Sarah Morgan (00005791)`. This avoids hunting for an engine address that changes with each patch.
 2. **The panel.** The plugin builds the panel at runtime inside the console movie: a Sprite with a TextField, added to `Menu_mc`. It borrows the console history's font, size and color, so it also matches console reskins. It sits just above the console's background, at the right edge by default.
 3. **Timing.** An SFSE permanent task checks every frame whether the console is open. Only while it is open, and only every `iRefreshFrames` frames, does it read the selection and update the panel.
+
+## Address Library safety
+
+CommonLibSF looks up each engine function the first time it is called. When the ID is missing for the running game version (or is a `0` placeholder in the fork), it shows the "Failed to find offset for Address Library ID" box and closes the game. That can't be caught once it starts.
+
+So at load, `AddressCheck.cpp` checks every ID the plugin can reach, directly or through CommonLibSF's inline code, against the loaded Address Library, without going through the lookup that aborts. It first makes the same checks the Address Library loader would (file present for this game version, supported format), since a failure there aborts too.
+
+| Missing | Effect |
+|---|---|
+| Address Library file, or any panel ID (UI, form lookup, strings, RTTI cast, Scaleform) | The plugin loads but does nothing. |
+| `ConsoleLog` | `bPrintToConsole` is ignored. |
+| `TESObjectREFR::GetCurrentLocation` | No "Location" line. |
+| `TESDataHandler` | "Defined in" shows `unknown`. |
+
+The log lists each missing ID and ends with `Address check: panel=... consolePrint=... location=... pluginNames=...`.
+
+**When adding code:** if a new call reaches an engine function, add its ID to the list in `AddressCheck.cpp` and guard the call with the matching flag. Search `include/RE/IDs.h` for `{ 0 }` first: those are known placeholders and must not be called at all.
 
 ## Requirements
 
@@ -50,7 +67,7 @@ Data/SFSE/Plugins/MoreInformativeConsoleSF.ini
 
 ## Test
 
-1. Start the game and load a save. `Documents\My Games\Starfield\SFSE\Logs\MoreInformativeConsoleSF.log` should end with `Console watcher registered`.
+1. Start the game and load a save. In `Documents\My Games\Starfield\SFSE\Logs\MoreInformativeConsoleSF.log`, the `Address check:` line should show `true` for all four features, followed by `Console watcher registered`.
 2. Open the console and click an NPC. The log should then say `Info panel added to the console`, and the panel should appear above the console.
 3. Click a container, a door and a piece of clutter, then type `prid 14` to select yourself. The panel should follow each selection.
 

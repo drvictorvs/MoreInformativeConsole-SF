@@ -2,7 +2,7 @@
 set_xmakever("3.0.0")
 
 set_project("MoreInformativeConsoleSF")
-set_version("0.1.0")
+set_version("0.1.1")
 set_license("GPL-3.0")
 
 set_arch("x64")
