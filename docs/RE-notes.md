@@ -66,17 +66,18 @@ Other settings seen: `fLockLevelBase` (obj `145ed9800`), `fLockLevelMult` (obj `
 
 ## Worn items, biped slots and armor addons
 
-`TESObject` is 0x50 on 1.16.244 (0x48 in the fork), so `TESObjectARMA` members after it are 8 bytes later than the fork says. Confirmed offsets (constants in `src/GameIDs.h`, `GameID::Layout`):
+Confirmed offsets (constants in `src/GameIDs.h`, `GameID::Layout`). CommonLibSF's compiled layout agrees with all of them; only its offset comments were stale (written for a 0x48 `TESObject`; it is 0x50). The one real difference was the slot mask's width, fixed in the fork branch `fix/armor-biped-material-swaps`.
 
-| Field | Offset | Fork | How confirmed |
-|---|---|---|---|
-| ARMO biped slot mask (u64) | 0x208 | 0x238 | BOD2 load in ARMO Load |
-| ARMO addon list `BSTArray<{u16 index; TESObjectARMA*}>` | 0x310 (size), 0x318 (data) | same | entries 0x10, addon at +8 |
-| ARMA race (`TESRaceForm` at 0x50) | 0x58 | 0x50 | component layout |
-| ARMA biped slot mask (u64) | 0x68 | 0x60 | BOD2 load in ARMA Load |
-| ARMA male / female biped model (`BGSModelMaterialSwap`, 0x28 each) | 0x90 / 0xB8 | 0x88 / 0xB0 | ARMA Load (ID 61147): the MOD2 branch passes `arma+0x90` and the MOD3 branch `arma+0xB8` to the model loaders (IDs 47641, 47645) |
-| ARMA additional races | 0x230 | 0x228 | assumed (+8), unconfirmed |
-| `TESModel::model` (BSFixedString) | 0x08 | same | setter ID 47641 writes `[this+8]` |
+| Field | Offset | How confirmed |
+|---|---|---|
+| ARMO base classes | `TESFullName` 0xE8 ... `BGSBipedObjectForm` 0x200 ... `BGSInstanceNamingRulesForm` 0x270 | game RTTI base-class offsets |
+| ARMO biped slot mask | 0x208, **u64** (CommonLibSF had u32) | the component loader reads the `BO64` subrecord as 8 bytes into the component at +8 |
+| ARMO addon list `BSTArray<{u16 index; TESObjectARMA*}>` | 0x310 (size), 0x318 (data) | entries 0x10, addon at +8 |
+| ARMA race (`TESRaceForm` at 0x50) | 0x58 | RTTI |
+| ARMA biped slot mask (`BGSBipedObjectForm` at 0x60) | 0x68 | RTTI |
+| ARMA male / female biped model (`BGSModelMaterialSwap`, 0x28 each) | 0x90 / 0xB8 | ARMA Load (ID 61147): the MOD2 branch passes `arma+0x90` and the MOD3 branch `arma+0xB8` to the model loaders (IDs 47641, 47645); later members (0x130, 0x158, 0x180, 0x1A0, 0x1E0-0x1F8) match too |
+| ARMA additional races | 0x230 | follows from the confirmed layout |
+| `TESModel::model` (BSFixedString) | 0x08 | setter ID 47641 writes `[this+8]` |
 
 The worn flag is the inventory item's `flags & 7`, as in the fork. Slot numbers in the panel are bit indices (0-63).
 
