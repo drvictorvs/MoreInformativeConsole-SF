@@ -30,6 +30,8 @@ namespace MIC::ConsolePanel
 			double        layoutX{ 0.0 };
 			double        layoutY{ 0.0 };
 			double        layoutW{ 0.0 };
+			double        layoutH{ 0.0 };
+			double        layoutTop{ 0.0 };
 			std::uint32_t layoutVersion{ 0 };
 		};
 
@@ -177,7 +179,8 @@ namespace MIC::ConsolePanel
 			auto&       state = GetState();
 
 			// The console's own background tells us where the console is on screen.
-			double bx = 0.0, by = 0.0, bw = 1280.0;
+			double bx = 0.0, by = 0.0, bw = 1280.0, bh = 0.0;
+			double screenTop = -1.0e9;  // top of the screen in the console's coordinates, if known
 			Value  background;
 			Value  bounds;
 			if (Member(a_console, "Background", background) &&
@@ -186,13 +189,23 @@ namespace MIC::ConsolePanel
 				if (Member(bounds, "x", v)) bx = Num(v, bx);
 				if (Member(bounds, "y", v)) by = Num(v, by);
 				if (Member(bounds, "width", v)) bw = Num(v, bw);
+				if (Member(bounds, "height", v)) bh = Num(v, bh);
+				// The same bounds measured on the stage give the console's offset from the screen's top.
+				Value stage;
+				Value stageBounds;
+				if (Member(a_console, "stage", stage) && stage.IsObject() &&
+					background.Invoke("getBounds", &stageBounds, &stage, 1) && stageBounds.IsObject() &&
+					Member(stageBounds, "y", v)) {
+					screenTop = by - Num(v, 0.0);
+				}
 			} else if (!state.loggedNoBounds) {
 				state.loggedNoBounds = true;
 				REX::WARN("Could not read the console background bounds; placing the panel at the console origin");
 			}
 
 			if (!a_textChanged && state.layoutValid && state.layoutVersion == settings.version &&
-				bx == state.layoutX && by == state.layoutY && bw == state.layoutW) {
+				bx == state.layoutX && by == state.layoutY && bw == state.layoutW && bh == state.layoutH &&
+				screenTop == state.layoutTop) {
 				return;  // nothing that affects the layout changed
 			}
 			state.layoutValid = true;
@@ -200,6 +213,8 @@ namespace MIC::ConsolePanel
 			state.layoutX = bx;
 			state.layoutY = by;
 			state.layoutW = bw;
+			state.layoutH = bh;
+			state.layoutTop = screenTop;
 
 			// width/height are in the panel's own units; on screen they are multiplied by the scale.
 			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
@@ -223,12 +238,14 @@ namespace MIC::ConsolePanel
 			}
 
 			const double x = (settings.alignRight ? bx + bw - screenWidth - settings.margin : bx + settings.margin) + settings.offsetX;
-			const double y = by - screenHeight - settings.margin + settings.offsetY;
+			const double bottom = settings.overConsole ? by + bh : by;  // over the console, or just above it
+			double       y = bottom - screenHeight - settings.margin + settings.offsetY;
+			y = std::max(y, screenTop + settings.margin);  // never above the top of the screen
 			Set(a_panel, "x", Value(x));
 			Set(a_panel, "y", Value(y));
 
 			if (settings.debugLog) {
-				REX::INFO("Layout: background x={} y={} w={}; panel x={} y={} w={} h={} scale={}", bx, by, bw, x, y, screenWidth, screenHeight, scale);
+				REX::INFO("Layout: background x={} y={} w={} h={} screen top={}; panel x={} y={} w={} h={} scale={}", bx, by, bw, bh, screenTop, x, y, screenWidth, screenHeight, scale);
 			}
 		}
 

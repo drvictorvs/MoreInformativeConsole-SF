@@ -36,6 +36,7 @@ namespace MIC
 				{ "General", "bDebugLog", "debugLog", Kind::Bool, &s.debugLog },
 
 				{ "Panel", "bAlignRight", "alignment", Kind::Align, &s.alignRight },
+				{ "Panel", "bOverConsole", "overConsole", Kind::Bool, &s.overConsole },
 				{ "Panel", "fWidthPercent", "widthPercent", Kind::Double, &s.widthPercent, 10, 100 },
 				{ "Panel", "fScale", "panelScale", Kind::Double, &s.panelScale, 0.25, 4 },
 				{ "Panel", "iFontSize", "fontSize", Kind::UInt, &s.fontSize, 0, 96 },

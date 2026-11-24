@@ -9,6 +9,8 @@
         "hint": "Prints the same information into the console each time you click a new reference." },
       { "key": "alignment", "type": "enum", "label": "Position", "default": "right",
         "options": { "right": "Right edge of the console", "left": "Left edge of the console" } },
+      { "key": "overConsole", "type": "bool", "label": "Cover the console", "default": false,
+        "hint": "Lines the panel's bottom up with the console's bottom instead of placing it above the console." },
       { "key": "widthPercent", "type": "float", "label": "Width (% of console)", "default": 40.0, "min": 15.0, "max": 100.0, "step": 5.0 },
       { "key": "panelScale", "type": "float", "label": "Scale", "default": 1.0, "min": 0.5, "max": 2.5, "step": 0.05,
         "hint": "Scales the whole panel, text included." },

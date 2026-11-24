@@ -15,6 +15,7 @@ namespace MIC
 
 		// Panel
 		bool          alignRight{ true };
+		bool          overConsole{ false };  // bottom-align with the console instead of sitting above it
 		double        widthPercent{ 40.0 };
 		double        panelScale{ 1.0 };
 		std::uint32_t fontSize{ 0 };  // 0 = console's own size
