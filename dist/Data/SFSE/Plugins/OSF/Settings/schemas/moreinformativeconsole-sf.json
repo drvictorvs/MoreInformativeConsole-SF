@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "title": "More Informative Console",
+  "description": "Information panel for the reference selected in the console. Changes apply the next time the console updates.",
+  "groups": {
+    "Panel": [
+      { "key": "showPanel", "type": "bool", "label": "Show info panel", "default": true },
+      { "key": "printToConsole", "type": "bool", "label": "Also print to console history", "default": false,
+        "hint": "Prints the same information into the console each time you click a new reference." },
+      { "key": "alignment", "type": "enum", "label": "Position", "default": "right",
+        "options": { "right": "Right edge of the console", "left": "Left edge of the console" } },
+      { "key": "widthPercent", "type": "float", "label": "Width (% of console)", "default": 40.0, "min": 15.0, "max": 100.0, "step": 5.0 },
+      { "key": "panelScale", "type": "float", "label": "Scale", "default": 1.0, "min": 0.5, "max": 2.5, "step": 0.05,
+        "hint": "Scales the whole panel, text included." },
+      { "key": "fontSize", "type": "int", "label": "Font size", "default": 0, "min": 0, "max": 48,
+        "hint": "0 uses the console's own text size." },
+      { "key": "backgroundOpacity", "type": "float", "label": "Background opacity", "default": 0.65, "min": 0.0, "max": 1.0, "step": 0.05 },
+      { "key": "offsetX", "type": "int", "label": "Nudge horizontally (px)", "default": 0, "min": -2000, "max": 2000 },
+      { "key": "offsetY", "type": "int", "label": "Nudge vertically (px)", "default": 0, "min": -2000, "max": 2000,
+        "hint": "Negative moves the panel up." },
+      { "key": "headerColor", "type": "string", "label": "Heading color", "default": "#F2C14E", "maxLength": 9 },
+      { "key": "labelColor", "type": "string", "label": "Label color", "default": "#9FB4C8", "maxLength": 9 },
+      { "key": "backgroundColor", "type": "string", "label": "Background color", "default": "#000000", "maxLength": 9 }
+    ],
+    "Sections": [
+      { "key": "showReference", "type": "bool", "label": "Reference", "default": true },
+      { "key": "showBase", "type": "bool", "label": "Base object", "default": true },
+      { "key": "showModel", "type": "bool", "label": "Model path", "default": true },
+      { "key": "showKeywords", "type": "bool", "label": "Keywords", "default": true },
+      { "key": "maxKeywords", "type": "int", "label": "Keywords shown", "default": 12, "min": 1, "max": 60 },
+      { "key": "showNPC", "type": "bool", "label": "NPC (race, traits, level)", "default": true },
+      { "key": "showFactions", "type": "bool", "label": "Factions and ranks", "default": true },
+      { "key": "showAI", "type": "bool", "label": "AI and animation (package, idle, furniture, dialogue)", "default": true },
+      { "key": "showLock", "type": "bool", "label": "Lock", "default": true },
+      { "key": "showInventory", "type": "bool", "label": "Inventory", "default": true },
+      { "key": "maxInventoryItems", "type": "int", "label": "Inventory items shown", "default": 8, "min": 1, "max": 60 },
+      { "key": "showPosition", "type": "bool", "label": "Position, cell and location", "default": true },
+      { "key": "showLocationChain", "type": "bool", "label": "Parent locations", "default": true }
+    ],
+    "Experimental": [
+      { "key": "showActorState", "type": "bool", "label": "Actor state (combat, talking, scene)", "default": false,
+        "hint": "Not yet confirmed on this game version. If enabling an experimental option crashes the game, turn it off and report it." },
+      { "key": "showActorValues", "type": "bool", "label": "Actor values (health, oxygen, AI values)", "default": false,
+        "hint": "Not yet confirmed on this game version." },
+      { "key": "showGraphVariables", "type": "bool", "label": "Animation graph variables", "default": false,
+        "hint": "Not yet confirmed on this game version." },
+      { "key": "graphVariables", "type": "string", "label": "Graph variables to read", "default": "iState, bIsSitting, Speed, Direction, bInJumpState", "maxLength": 512,
+        "hint": "Comma-separated. bName = bool, iName = int, others float; or force with name:b, name:i, name:f." },
+      { "key": "showBounds", "type": "bool", "label": "Object size", "default": false,
+        "hint": "Not yet confirmed on this game version." },
+      { "key": "showGravity", "type": "bool", "label": "Gravity", "default": false,
+        "hint": "Not yet confirmed on this game version." },
+      { "key": "showEngineDetails", "type": "bool", "label": "Engine debug text", "default": false,
+        "hint": "Not yet confirmed on this game version." }
+    ],
+    "Diagnostics": [
+      { "key": "refreshFrames", "type": "int", "label": "Refresh every N frames", "default": 15, "min": 1, "max": 120 },
+      { "key": "debugLog", "type": "bool", "label": "Debug log", "default": false,
+        "hint": "Writes the selection text and panel layout to MoreInformativeConsoleSF.log." }
+    ]
+  }
+}

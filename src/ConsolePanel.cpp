@@ -20,6 +20,7 @@ namespace MIC::ConsolePanel
 			std::string   lastSelectionText;
 			RE::TESFormID lastPrintedID{ 0 };
 			std::string   lastHTML;
+			std::uint32_t appliedStyle{ 0 };  // Settings::version the panel was styled with
 			bool          loggedNoParse{ false };
 			bool          loggedNoBounds{ false };
 		};
@@ -103,8 +104,6 @@ namespace MIC::ConsolePanel
 				return false;
 			}
 
-			const auto& settings = Settings::Get();
-
 			Set(a_panel, "name", Value(kPanelName));
 			Set(a_panel, "mouseEnabled", Value(false));
 			Set(a_panel, "mouseChildren", Value(false));
@@ -113,9 +112,26 @@ namespace MIC::ConsolePanel
 			Set(a_text, "x", Value(kPadding));
 			Set(a_text, "y", Value(kPadding));
 
-			// Borrow the console history's font so the panel matches the console (and any
-			// console reskin), including whether that font is embedded.
-			Value history;
+			Set(a_text, "multiline", Value(true));
+			Set(a_text, "wordWrap", Value(true));
+			Set(a_text, "selectable", Value(false));
+			Set(a_text, "mouseEnabled", Value(false));
+			Set(a_text, "autoSize", Value("left"));
+
+			a_panel.Invoke("addChild", nullptr, &a_text, 1);
+			a_console.Invoke("addChild", nullptr, &a_panel, 1);
+
+			a_created = true;
+			REX::INFO("Info panel added to the console");
+			return true;
+		}
+
+		// Font and size. Borrows the console history's font so the panel matches the console (and
+		// any console reskin), including whether that font is embedded. Re-run when settings change.
+		void ApplyStyle(Value& a_console, Value& a_panel, Value& a_text)
+		{
+			const auto& settings = Settings::Get();
+			Value       history;
 			if (Member(a_console, "CommandHistory", history)) {
 				Value format;
 				if (Member(history, "defaultTextFormat", format) && format.IsObject()) {
@@ -133,19 +149,18 @@ namespace MIC::ConsolePanel
 					Set(a_text, "textColor", color);
 				}
 			}
+			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
+			Set(a_panel, "scaleX", Value(scale));
+			Set(a_panel, "scaleY", Value(scale));
+		}
 
-			Set(a_text, "multiline", Value(true));
-			Set(a_text, "wordWrap", Value(true));
-			Set(a_text, "selectable", Value(false));
-			Set(a_text, "mouseEnabled", Value(false));
-			Set(a_text, "autoSize", Value("left"));
-
-			a_panel.Invoke("addChild", nullptr, &a_text, 1);
-			a_console.Invoke("addChild", nullptr, &a_panel, 1);
-
-			a_created = true;
-			REX::INFO("Info panel added to the console");
-			return true;
+		void HideExistingPanel(Value& a_console)
+		{
+			Value nameArg(kPanelName);
+			Value panel;
+			if (a_console.Invoke("getChildByName", &panel, &nameArg, 1) && panel.IsDisplayObject()) {
+				Set(panel, "visible", Value(false));
+			}
 		}
 
 		void Layout(Value& a_console, Value& a_panel, Value& a_text)
@@ -168,12 +183,16 @@ namespace MIC::ConsolePanel
 				REX::WARN("Could not read the console background bounds; placing the panel at the console origin");
 			}
 
-			const double width = std::max(120.0, bw * settings.widthPercent / 100.0);
+			// width/height are in the panel's own units; on screen they are multiplied by the scale.
+			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
+			const double screenWidth = std::max(120.0, bw * settings.widthPercent / 100.0);
+			const double width = screenWidth / scale;
 			Set(a_text, "width", Value(width - 2 * kPadding));
 
 			Value heightVal;
 			const double textHeight = Member(a_text, "height", heightVal) ? Num(heightVal, 0.0) : 0.0;
 			const double height = textHeight + 2 * kPadding;
+			const double screenHeight = height * scale;
 
 			Value graphics;
 			if (Member(a_panel, "graphics", graphics)) {
@@ -185,13 +204,13 @@ namespace MIC::ConsolePanel
 				graphics.Invoke("endFill");
 			}
 
-			const double x = (settings.alignRight ? bx + bw - width - settings.margin : bx + settings.margin) + settings.offsetX;
-			const double y = by - height - settings.margin + settings.offsetY;
+			const double x = (settings.alignRight ? bx + bw - screenWidth - settings.margin : bx + settings.margin) + settings.offsetX;
+			const double y = by - screenHeight - settings.margin + settings.offsetY;
 			Set(a_panel, "x", Value(x));
 			Set(a_panel, "y", Value(y));
 
 			if (settings.debugLog) {
-				REX::INFO("Layout: background x={} y={} w={}; panel x={} y={} w={} h={}", bx, by, bw, x, y, width, height);
+				REX::INFO("Layout: background x={} y={} w={}; panel x={} y={} w={} h={} scale={}", bx, by, bw, x, y, screenWidth, screenHeight, scale);
 			}
 		}
 
@@ -258,6 +277,7 @@ namespace MIC::ConsolePanel
 			}
 
 			if (!settings.showPanel) {
+				HideExistingPanel(console);
 				return;
 			}
 
@@ -267,8 +287,10 @@ namespace MIC::ConsolePanel
 			if (!GetOrCreatePanel(movie, console, panel, text, created)) {
 				return;
 			}
-			if (created) {
-				state.lastHTML.clear();
+			if (created || state.appliedStyle != settings.version) {
+				ApplyStyle(console, panel, text);
+				state.appliedStyle = settings.version;
+				state.lastHTML.clear();  // re-set the text so the new format applies
 			}
 
 			if (!ref) {
@@ -323,6 +345,11 @@ namespace MIC::ConsolePanel
 		}
 		auto& state = GetState();
 		++state.frame;
+
+		// OSF Settings changes arrive on another thread; re-read them here, on the game thread.
+		if (OSF::ConsumeChanged()) {
+			Settings::Get().Load();
+		}
 
 		auto* ui = RE::UI::GetSingleton();
 		if (!ui) {

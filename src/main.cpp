@@ -6,7 +6,14 @@ namespace
 {
 	void OnMessage(SFSE::MessagingInterface::Message* a_msg)
 	{
-		if (!a_msg || a_msg->type != SFSE::MessagingInterface::kPostDataLoad) {
+		if (!a_msg) {
+			return;
+		}
+		if (a_msg->type == SFSE::MessagingInterface::kPostLoad) {
+			MIC::OSF::Init();  // optional: connects to OSF Settings' menu if installed
+			return;
+		}
+		if (a_msg->type != SFSE::MessagingInterface::kPostDataLoad) {
 			return;
 		}
 

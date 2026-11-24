@@ -21,6 +21,11 @@ namespace MIC::Address
 		bool consolePrint{ false };  // ConsoleLog: bPrintToConsole
 		bool location{ false };      // TESObjectREFR::GetCurrentLocation: the "Location" line
 		bool dataHandler{ false };   // TESDataHandler: "Defined in" plugin names
+		bool inventory{ false };     // BSReadWriteLock: inventory and equipped items
+		bool factionRank{ false };   // Actor::GetFactionRank: live faction ranks
+		bool furniture{ false };     // handle lookup + TESForm::DecRefCount: furniture in use
+		bool actorValues{ false };   // ActorValue::GetSingleton: experimental actor values
+		bool lockDetails{ false };   // GameIDs.h lock getter, area level and lock-level settings
 	};
 
 	// Runs the check the first time; afterwards returns the cached result.

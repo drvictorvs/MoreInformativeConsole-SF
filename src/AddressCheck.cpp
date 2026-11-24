@@ -1,5 +1,7 @@
 #include "AddressCheck.h"
 
+#include "GameIDs.h"
+
 namespace MIC::Address
 {
 	namespace
@@ -135,11 +137,38 @@ namespace MIC::Address
 				{ RE::ID::TESDataHandler::Singleton, "TESDataHandler::Singleton" },
 			});
 
+			f.inventory = CheckGroup("Inventory", {
+				{ RE::ID::BSReadWriteLock::LockRead, "BSReadWriteLock::LockRead" },
+				{ RE::ID::BSReadWriteLock::UnlockRead, "BSReadWriteLock::UnlockRead" },
+			});
+			f.factionRank = CheckGroup("Live faction ranks", {
+				{ RE::ID::Actor::GetFactionRank, "Actor::GetFactionRank" },
+			});
+			f.furniture = CheckGroup("Furniture line", {
+				{ RE::ID::BSPointerHandleManagerInterface::GetSmartPointer, "BSPointerHandleManagerInterface::GetSmartPointer" },
+				{ RE::ID::TESForm::DecRefCount, "TESForm::DecRefCount" },
+			});
+			f.actorValues = CheckGroup("Actor values", {
+				{ RE::ID::ActorValue::GetSingleton, "ActorValue::GetSingleton" },
+			});
+
+			{
+				bool ok = CheckGroup("Lock details", {
+					{ GameID::GetLock, "GetLock (found for this mod)" },
+					{ GameID::GetAreaLevel, "GetAreaLevel (found for this mod)" },
+					{ GameID::fLeveledLockMult, "fLeveledLockMult" },
+				});
+				for (const auto& rung : GameID::kLockLadder) {
+					ok = CheckGroup("Lock details", { { rung.maxValue, "iLockLevelMax*" }, { rung.name, "sLockLevelName*" } }) && ok;
+				}
+				f.lockDetails = ok;
+			}
+
 			if (!f.core) {
 				REX::ERROR("Core functions are missing for this game version; the plugin stays inactive");
 			}
-			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={}",
-				f.core, f.consolePrint, f.location, f.dataHandler);
+			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={}",
+				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails);
 			return f;
 		}
 	}

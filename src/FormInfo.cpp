@@ -1,6 +1,8 @@
 #include "FormInfo.h"
 
 #include "AddressCheck.h"
+#include "GameIDs.h"
+#include "SafeMemory.h"
 #include "Settings.h"
 
 namespace MIC
@@ -9,16 +11,15 @@ namespace MIC
 	{
 		constexpr float kRadToDeg = 57.29577951308232f;
 
-		std::string Hex(RE::TESFormID a_id) { return std::format("{:08X}", a_id); }
+		// ---- small helpers ------------------------------------------------------------------------
 
-		std::string SafeStr(const char* a_str) { return a_str ? std::string(a_str) : std::string(); }
+		std::string Hex(RE::TESFormID a_id) { return std::format("{:08X}", a_id); }
 
 		std::string FileName(const RE::TESFile* a_file)
 		{
-			if (!a_file) {
+			if (!a_file || !Safe::Readable(a_file, sizeof(a_file->fileName))) {
 				return {};
 			}
-			// fileName is a fixed char[260]; never read past it.
 			const auto* begin = a_file->fileName;
 			const auto* end = std::find(begin, begin + sizeof(a_file->fileName), '\0');
 			return std::string(begin, end);
@@ -26,7 +27,7 @@ namespace MIC
 
 		std::string EditorID(const RE::TESForm* a_form)
 		{
-			return a_form ? SafeStr(a_form->GetFormEditorID()) : std::string();
+			return a_form ? Safe::CString(a_form->GetFormEditorID()) : std::string();
 		}
 
 		std::string Name(RE::TESForm* a_form)
@@ -35,10 +36,10 @@ namespace MIC
 				return {};
 			}
 			if (auto* ref = a_form->AsReference()) {
-				return SafeStr(ref->GetDisplayFullName());
+				return Safe::CString(ref->GetDisplayFullName());
 			}
 			if (auto* full = starfield_cast<RE::TESFullName*>(a_form)) {
-				return SafeStr(full->GetFullName());
+				return Safe::CString(full->GetFullName());
 			}
 			return {};
 		}
@@ -66,10 +67,24 @@ namespace MIC
 			return out;
 		}
 
+		// "EDID (0001ABCD, Plugin.esm)"; falls back to the name when there is no editor ID.
+		std::string DescribeWithFile(RE::TESForm* a_form)
+		{
+			if (!a_form) {
+				return "none";
+			}
+			auto label = EditorID(a_form);
+			if (label.empty()) {
+				label = Name(a_form);
+			}
+			const auto file = DefiningFileName(a_form->GetFormID());
+			return std::format("{}{}({}{})", label, label.empty() ? "" : " ", Hex(a_form->GetFormID()),
+				file.empty() ? "" : ", " + file);
+		}
+
 		std::string LastFileName(const RE::TESForm* a_form)
 		{
-			// The engine's "description owner" file: for plugin-defined forms this is the
-			// file whose record is in effect (the last override). Unverified on every form type.
+			// The engine's "description owner" file: for plugin records, the override in effect.
 			return a_form ? FileName(a_form->GetDescriptionOwnerFile()) : std::string();
 		}
 
@@ -83,18 +98,25 @@ namespace MIC
 			}
 		}
 
-		std::string Flags(const RE::TESForm* a_form)
+		std::string Join(const std::vector<std::string>& a_parts, std::string_view a_sep = ", ")
 		{
-			std::vector<std::string_view> flags;
-			if (a_form->IsPersistent()) flags.push_back("persistent");
-			if (a_form->IsDisabled()) flags.push_back("disabled");
-			if (a_form->IsDeleted()) flags.push_back("deleted");
-			if (a_form->IsCreated()) flags.push_back("created in game");
 			std::string out;
-			for (const auto f : flags) {
-				out += out.empty() ? std::string(f) : std::format(", {}", f);
+			for (const auto& p : a_parts) {
+				if (p.empty()) continue;
+				if (!out.empty()) out += a_sep;
+				out += p;
 			}
 			return out;
+		}
+
+		std::string Flags(const RE::TESForm* a_form)
+		{
+			std::vector<std::string> flags;
+			if (a_form->IsPersistent()) flags.emplace_back("persistent");
+			if (a_form->IsDisabled()) flags.emplace_back("disabled");
+			if (a_form->IsDeleted()) flags.emplace_back("deleted");
+			if (a_form->IsCreated()) flags.emplace_back("created in game");
+			return Join(flags);
 		}
 
 		std::string Point(const RE::NiPoint3& a_pt, float a_scale = 1.0f)
@@ -105,7 +127,7 @@ namespace MIC
 		std::string Model(RE::TESForm* a_form)
 		{
 			if (auto* model = starfield_cast<RE::TESModel*>(a_form)) {
-				return SafeStr(model->model.c_str());
+				return Safe::FixedString(&model->model);
 			}
 			return {};
 		}
@@ -116,6 +138,18 @@ namespace MIC
 			a_form->GetFormDetailedString(buffer, sizeof(buffer));
 			buffer[sizeof(buffer) - 1] = '\0';
 			return buffer;
+		}
+
+		// A BSTArray's elements, only if the whole block is readable and the size is sane.
+		template <class T>
+		std::span<const T> SafeArray(const RE::BSTArray<T>& a_array, std::size_t a_maxSize = 4096)
+		{
+			const auto size = a_array.size();
+			const auto* data = a_array.data();
+			if (size == 0 || size > a_maxSize || !data || !Safe::Readable(data, size * sizeof(T))) {
+				return {};
+			}
+			return { data, size };
 		}
 
 		std::string EscapeHTML(std::string_view a_text)
@@ -133,6 +167,494 @@ namespace MIC
 			}
 			return out;
 		}
+
+		// ---- sections -----------------------------------------------------------------------------
+
+		std::string Keywords(RE::TESForm* a_form, std::uint32_t a_max)
+		{
+			auto* kwForm = starfield_cast<RE::BGSKeywordForm*>(a_form);
+			if (!kwForm || !Safe::Readable(kwForm, sizeof(RE::BGSKeywordForm))) {
+				return {};
+			}
+			const auto               keywords = SafeArray(kwForm->keywords);
+			std::vector<std::string> names;
+			for (auto* ptr : keywords) {
+				if (names.size() >= a_max) {
+					break;
+				}
+				if (auto* kw = Safe::Form(ptr)) {
+					auto edid = EditorID(kw);
+					names.push_back(edid.empty() ? Hex(kw->GetFormID()) : edid);
+				}
+			}
+			auto out = Join(names);
+			if (keywords.size() > names.size() && !names.empty()) {
+				out += std::format("  (+{} more)", keywords.size() - names.size());
+			}
+			return out;
+		}
+
+		void AddNPCSection(std::vector<InfoSection>& a_out, RE::Actor* a_actor, RE::TESNPC* a_npc)
+		{
+			const auto& settings = Settings::Get();
+			InfoSection sec{ "NPC", {} };
+
+			if (auto* race = Safe::Form(a_actor->race)) {
+				sec.lines.push_back({ "Race", DescribeWithFile(race) });
+			}
+
+			if (a_npc && Safe::Readable(a_npc, sizeof(RE::TESNPC))) {
+				const RE::TESActorBaseData& data = *a_npc;  // base class, no cast needed
+				using Flag = RE::ACTOR_BASE_DATA::Flag;
+				const auto& flags = data.actorData.actorBaseFlags;
+
+				std::vector<std::string> traits;
+				if (flags.all(Flag::kEssential)) traits.emplace_back("essential");
+				if (flags.all(Flag::kProtected)) traits.emplace_back("protected");
+				if (flags.all(Flag::kUnique)) traits.emplace_back("unique");
+				if (flags.all(Flag::kInvulnerable)) traits.emplace_back("invulnerable");
+				if (flags.all(Flag::kIsGhost)) traits.emplace_back("ghost");
+				if (flags.all(Flag::kRespawn)) traits.emplace_back("respawns");
+				if (flags.all(Flag::kSimpleActor)) traits.emplace_back("simple actor");
+				traits.emplace_back(flags.all(Flag::kFemale) ? "female" : "male");
+				sec.lines.push_back({ "Traits", Join(traits) });
+
+				if (flags.all(Flag::kPCLevelMult)) {
+					sec.lines.push_back({ "Level", std::format("scales with player, {}-{}", data.actorData.calcLevelMin, data.actorData.calcLevelMax) });
+				} else {
+					sec.lines.push_back({ "Level", std::to_string(data.actorData.level) });
+				}
+				if (flags.all(Flag::kUsesTemplate)) {
+					sec.lines.push_back({ "Template", "uses a leveled template (values above may come from it)" });
+				}
+
+				if (settings.showFactions) {
+					std::vector<std::string> factions;
+					for (const auto& entry : SafeArray(data.factions, 512)) {
+						auto* faction = Safe::FormAs<RE::TESFaction>(entry.faction);
+						if (!faction) {
+							continue;
+						}
+						std::string text = std::format("{} {}", EditorID(faction).empty() ? Hex(faction->GetFormID()) : EditorID(faction), entry.rank);
+						if (Address::Get().factionRank) {
+							const auto live = a_actor->GetFactionRank(faction, a_actor->GetFormID() == 0x14);
+							if (live != entry.rank) {
+								text += std::format(" (now {})", live);
+							}
+						}
+						factions.push_back(std::move(text));
+					}
+					if (!factions.empty()) {
+						sec.lines.push_back({ "Factions", Join(factions) });
+					}
+				}
+			}
+
+			std::vector<std::string> state;
+			if (a_actor->IsDead()) state.emplace_back("dead");
+			if (a_actor->IsInCombatSearch()) state.emplace_back("searching (combat)");
+			if (a_actor->IsInWater()) state.emplace_back("in water");
+			if (!state.empty()) {
+				sec.lines.push_back({ "State", Join(state) });
+			}
+
+			if (!sec.lines.empty()) {
+				a_out.push_back(std::move(sec));
+			}
+		}
+
+		const char* CommandName(RE::COMMAND_TYPE a_type)
+		{
+			using C = RE::COMMAND_TYPE;
+			switch (a_type) {
+			case C::kNone: return "none";
+			case C::kCall: return "call";
+			case C::kFollow: return "follow";
+			case C::kMove: return "move";
+			case C::kAttack: return "attack";
+			case C::kInspect: return "inspect";
+			case C::kRetrieve: return "retrieve";
+			case C::kStay: return "stay";
+			case C::kRelease: return "release";
+			case C::kHeal: return "heal";
+			case C::kAssign: return "assign";
+			case C::kRide: return "ride";
+			case C::kEnter: return "enter";
+			default: return nullptr;
+			}
+		}
+
+		// "name" -> float, "bName" -> bool, "iName" -> int; or explicit "name:f|i|b".
+		struct GraphVar
+		{
+			std::string name;
+			char        type;
+		};
+
+		std::vector<GraphVar> ParseGraphVariables(std::string_view a_list)
+		{
+			std::vector<GraphVar> out;
+			std::string           token;
+			auto                  flush = [&]() {
+                if (token.empty()) return;
+                char type = 'f';
+                if (const auto colon = token.find(':'); colon != std::string::npos) {
+                    type = static_cast<char>(std::tolower(static_cast<unsigned char>(token[colon + 1 < token.size() ? colon + 1 : colon])));
+                    token.erase(colon);
+                } else if (token.size() > 1 && std::isupper(static_cast<unsigned char>(token[1]))) {
+                    if (token[0] == 'b') type = 'b';
+                    else if (token[0] == 'i') type = 'i';
+                }
+                if (type != 'b' && type != 'i') type = 'f';
+                if (!token.empty() && out.size() < 24) out.push_back({ token, type });
+                token.clear();
+			};
+			for (const char c : a_list) {
+				if (c == ',' || c == ';' || std::isspace(static_cast<unsigned char>(c))) {
+					flush();
+				} else {
+					token += c;
+				}
+			}
+			flush();
+			return out;
+		}
+
+		void AddAISection(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
+		{
+			const auto& settings = Settings::Get();
+			InfoSection sec{ "AI & animation", {} };
+
+			auto* process = a_actor->currentProcess;
+			if (process && Safe::Readable(process, sizeof(RE::AIProcess))) {
+				auto* middleHigh = Safe::Readable(process->middleHigh, sizeof(RE::MiddleHighProcessData)) ? process->middleHigh : nullptr;
+				auto* high = Safe::Readable(process->high, sizeof(RE::HighProcessData)) ? process->high : nullptr;
+
+				// Package: a run-once package (scripts, scenes) overrides the normal one while it runs.
+				const RE::ActorPackage* running = &process->currentPackage;
+				bool                    runOnce = false;
+				if (middleHigh && Safe::FormAs<RE::TESPackage>(middleHigh->runOncePackage.package)) {
+					running = &middleHigh->runOncePackage;
+					runOnce = true;
+				}
+				if (auto* package = Safe::FormAs<RE::TESPackage>(running->package)) {
+					sec.lines.push_back({ "Package", DescribeWithFile(package) });
+					sec.lines.push_back({ "Package info", std::format("type {}, procedure {}{}",
+						static_cast<int>(package->packageData.packageType), running->currentProcedureIndex,
+						runOnce ? ", run-once override" : "") });
+					if (runOnce) {
+						if (auto* normal = Safe::FormAs<RE::TESPackage>(process->currentPackage.package)) {
+							sec.lines.push_back({ "Normal package", DescribeWithFile(normal) });
+						}
+					}
+				}
+
+				if (high) {
+					if (auto* idle = Safe::FormAs<RE::TESIdleForm>(high->idleToPlay)) {
+						sec.lines.push_back({ "Queued idle", DescribeWithFile(idle) });
+						const auto event = Safe::FixedString(&idle->animEventName);
+						const auto graph = Safe::FixedString(&idle->behaviorGraphName);
+						const auto file = Safe::FixedString(&idle->animFileName);
+						if (!event.empty() || !graph.empty()) {
+							sec.lines.push_back({ "Idle event", Join({ event, graph.empty() ? "" : "graph " + graph }) });
+						}
+						if (!file.empty()) {
+							sec.lines.push_back({ "Idle file", file });
+						}
+					}
+
+					const auto subtitle = Safe::FixedString(&high->strVoiceSubtitle, 300);
+					if (!subtitle.empty()) {
+						sec.lines.push_back({ high->capLinePlaying ? "Saying" : "Last line", subtitle });
+					}
+					if (high->inCommandState && high->commandType != RE::COMMAND_TYPE::kNone) {
+						const char* name = CommandName(high->commandType);
+						sec.lines.push_back({ "Command", name ? name : std::format("type {}", std::to_underlying(high->commandType)) });
+					}
+					sec.lines.push_back({ "Light level", std::format("{:.1f}", high->lightLevel) });
+				}
+
+				if (middleHigh && Address::Get().furniture && middleHigh->currentFurniture) {
+					const auto furniture = middleHigh->currentFurniture.get();
+					if (auto* ref = Safe::Form(furniture.get())) {
+						sec.lines.push_back({ "Furniture", Describe(ref) });
+					}
+				}
+			}
+
+			if (settings.showGraphVariables) {
+				auto&                    holder = static_cast<RE::IAnimationGraphManagerHolder&>(*a_actor);
+				std::vector<std::string> values;
+				for (const auto& var : ParseGraphVariables(settings.graphVariables)) {
+					const RE::BSFixedString name{ var.name.c_str() };
+					bool                    ok = false;
+					std::string             text;
+					if (var.type == 'b') {
+						bool v{};
+						ok = holder.GetGraphVariableImplBool(name, v);
+						text = v ? "true" : "false";
+					} else if (var.type == 'i') {
+						std::int32_t v{};
+						ok = holder.GetGraphVariableImplInt(name, v);
+						text = std::to_string(v);
+					} else {
+						float v{};
+						ok = holder.GetGraphVariableImplFloat(name, v);
+						text = std::format("{:.2f}", v);
+					}
+					values.push_back(std::format("{}={}", var.name, ok ? text : "n/a"));
+				}
+				if (!values.empty()) {
+					sec.lines.push_back({ "Graph", Join(values) });
+				}
+			}
+
+			if (!sec.lines.empty()) {
+				a_out.push_back(std::move(sec));
+			}
+		}
+
+		void AddExperimentalActor(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
+		{
+			const auto& settings = Settings::Get();
+			InfoSection sec{ "Actor (experimental)", {} };
+
+			if (settings.showActorState) {
+				std::vector<std::string> state;
+				if (a_actor->IsInCombat()) state.emplace_back("in combat");
+				if (static_cast<RE::TESObjectREFR*>(a_actor)->IsInvulnerable()) state.emplace_back("invulnerable");
+				if (a_actor->IsTalking()) state.emplace_back("talking");
+				sec.lines.push_back({ "State", state.empty() ? "-" : Join(state) });
+				if (auto* scene = Safe::Form(a_actor->GetCurrentScene())) {
+					sec.lines.push_back({ "Scene", DescribeWithFile(scene) });
+				}
+			}
+
+			if (settings.showActorValues && Address::Get().actorValues) {
+				auto* avs = RE::ActorValue::GetSingleton();
+				if (avs && Safe::Readable(avs, sizeof(RE::ActorValue))) {
+					auto&                    owner = static_cast<RE::ActorValueOwner&>(*a_actor);
+					std::vector<std::string> values;
+					const std::pair<const char*, RE::ActorValueInfo*> list[] = {
+						{ "Health", avs->health }, { "Oxygen", avs->oxygen }, { "Carry", avs->carryWeight },
+						{ "Speed", avs->speedMult }, { "Aggression", avs->aggression }, { "Confidence", avs->confidence },
+						{ "Assistance", avs->assistance }, { "Morality", avs->morality },
+					};
+					for (const auto& [label, info] : list) {
+						if (auto* form = Safe::FormAs<RE::ActorValueInfo>(info)) {
+							const auto current = owner.GetActorValue(*form);
+							const auto base = owner.GetBaseActorValue(*form);
+							values.push_back(current == base ? std::format("{} {:.0f}", label, current) : std::format("{} {:.0f}/{:.0f}", label, current, base));
+						}
+					}
+					if (!values.empty()) {
+						sec.lines.push_back({ "Values", Join(values) });
+					}
+				}
+			}
+
+			if (!sec.lines.empty()) {
+				a_out.push_back(std::move(sec));
+			}
+		}
+
+		// The reference's own lock entry, read directly (fallback when the game's lock getter is unavailable).
+		RE::REFR_LOCK* OwnLock(RE::TESObjectREFR* a_ref)
+		{
+			if (!Address::Get().inventory) {  // GetByType takes the extra-data read lock
+				return nullptr;
+			}
+			auto* list = a_ref->extraDataList.get();
+			if (!list || !Safe::Readable(list, sizeof(RE::ExtraDataList))) {
+				return nullptr;
+			}
+			auto* extra = list->GetByType<RE::ExtraLock>();
+			if (!extra || !Safe::Readable(extra, sizeof(RE::ExtraLock)) || !Safe::Readable(extra->lock, sizeof(RE::REFR_LOCK))) {
+				return nullptr;
+			}
+			return extra->lock;
+		}
+
+		template <class T>
+		bool ReadGlobal(REL::ID a_id, T& a_out)
+		{
+			if (!Address::IsPresent(a_id.id())) {
+				return false;
+			}
+			return Safe::Read(reinterpret_cast<const void*>(REL::Relocation<std::uintptr_t>{ a_id }.address()), a_out);
+		}
+
+		std::string GameSettingString(REL::ID a_id)
+		{
+			const char* text = nullptr;
+			return ReadGlobal(a_id, text) ? Safe::CString(text, 64) : std::string();
+		}
+
+		// The game's lock-level name for a level, exactly as REFR_LOCK::GetLockLevel (ID 45439) and its
+		// level-to-category step (ID 45441) do it: the first rung whose iLockLevelMax* is >= the level,
+		// in ladder order; above every rung, "Requires Key" (iLockLevelMaxImpossible's name).
+		std::string LockCategory(std::int32_t a_level)
+		{
+			for (std::size_t i = 0; i < std::size(GameID::kLockLadder); ++i) {
+				std::int32_t max = 0;
+				if (!ReadGlobal(GameID::kLockLadder[i].maxValue, max)) {
+					return {};
+				}
+				if (a_level <= max || i == GameID::kLockImpossible) {
+					return GameSettingString(GameID::kLockLadder[i].name);
+				}
+			}
+			return {};
+		}
+
+		void AddLockSection(std::vector<InfoSection>& a_out, RE::TESObjectREFR* a_ref)
+		{
+			RE::REFR_LOCK* own = OwnLock(a_ref);
+			RE::REFR_LOCK* lock = own;
+			const bool     details = Address::Get().lockDetails;
+			if (details) {
+				using GetLock_t = RE::REFR_LOCK*(RE::TESObjectREFR*);
+				static REL::Relocation<GetLock_t*> getLock{ GameID::GetLock };
+				lock = getLock(a_ref);
+			}
+			if (!lock || !Safe::Readable(lock, sizeof(RE::REFR_LOCK))) {
+				return;
+			}
+
+			InfoSection sec{ "Lock", {} };
+			const std::int32_t base = static_cast<std::uint8_t>(lock->baseLevel);
+			std::int32_t       level = base;
+			std::string        how;
+
+			// Same rule as the GetLockLevel console command: leveled locks (flag 0x04) add the area
+			// level times fLeveledLockMult (converted to an integer by truncation), capped at 99,
+			// unless the lock is set to iLockLevelMaxImpossible ("Requires Key").
+			std::int32_t impossible = 255;
+			if (details) {
+				ReadGlobal(GameID::kLockLadder[GameID::kLockImpossible].maxValue, impossible);
+			}
+			if (lock->flags.all(RE::REFR_LOCK::Flag::kLeveled) && base != (impossible & 0xFF)) {
+				if (details) {
+					using GetAreaLevel_t = std::uint16_t(RE::TESObjectREFR*, bool);
+					static REL::Relocation<GetAreaLevel_t*> getAreaLevel{ GameID::GetAreaLevel };
+					float mult = 0.0f;
+					ReadGlobal(GameID::fLeveledLockMult, mult);
+					const auto area = getAreaLevel(a_ref, false);
+					level = std::min(99, base + static_cast<std::int32_t>(area) * static_cast<std::int32_t>(mult));
+					how = std::format(", leveled: base {} + area level {} x {}", base, area, static_cast<std::int32_t>(mult));
+				} else {
+					how = ", leveled";
+				}
+			}
+
+			const auto category = details ? LockCategory(level) : std::string();
+			sec.lines.push_back({ "Lock", std::format("{}, {}{}{}", lock->IsLocked() ? "locked" : "unlocked",
+											  category.empty() ? std::format("level {}", level) : std::format("{} ({})", category, level),
+											  how, (details && !own) ? " (from the linked door)" : "") });
+			if (auto* key = Safe::Form(lock->key)) {
+				sec.lines.push_back({ "Key", Describe(key) });
+			}
+			a_out.push_back(std::move(sec));
+		}
+
+		void AddInventorySection(std::vector<InfoSection>& a_out, RE::TESObjectREFR* a_ref)
+		{
+			const auto& settings = Settings::Get();
+			if (!Address::Get().inventory) {
+				return;
+			}
+			struct Entry
+			{
+				std::string   name;
+				std::uint64_t count;
+				bool          equipped;
+			};
+			std::vector<Entry> entries;
+			std::size_t        distinct = 0;
+			std::uint64_t      total = 0;
+
+			a_ref->ForEachInventoryItem([&](const RE::BGSInventoryItem& a_item) {
+				if (distinct >= 4096) {
+					return RE::BSContainer::ForEachResult::kStop;
+				}
+				auto* object = Safe::Form(a_item.object);
+				if (!object) {
+					return RE::BSContainer::ForEachResult::kContinue;
+				}
+				std::uint64_t count = 0;
+				for (const auto& stack : SafeArray(a_item.stacks, 1024)) {
+					if (stack.count > 0 && stack.count < 1'000'000) {
+						count += stack.count;
+					}
+				}
+				++distinct;
+				total += count;
+				if (entries.size() < settings.maxInventoryItems) {
+					auto name = Name(object);
+					if (name.empty()) name = EditorID(object);
+					if (name.empty()) name = Hex(object->GetFormID());
+					entries.push_back({ std::move(name), count, a_item.IsEquipped() });
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+
+			if (distinct == 0) {
+				return;
+			}
+			InfoSection sec{ "Inventory", {} };
+			sec.lines.push_back({ "Items", std::format("{} kinds, {} total", distinct, total) });
+			std::vector<std::string> parts;
+			for (const auto& e : entries) {
+				parts.push_back(std::format("{}{}{}", e.name, e.count > 1 ? std::format(" x{}", e.count) : "", e.equipped ? " [E]" : ""));
+			}
+			if (!parts.empty()) {
+				sec.lines.push_back({ "First", Join(parts) + (distinct > entries.size() ? ", ..." : "") });
+			}
+			a_out.push_back(std::move(sec));
+		}
+
+		void AddPositionSection(std::vector<InfoSection>& a_out, RE::TESObjectREFR* a_ref)
+		{
+			const auto& settings = Settings::Get();
+			InfoSection sec{ "Position", {} };
+			sec.lines.push_back({ "Position", Point(a_ref->GetPosition()) });
+			sec.lines.push_back({ "Rotation", Point(a_ref->GetAngle(), kRadToDeg) + " deg" });
+			// TESObjectREFR::GetScale has no Address Library ID for 1.16.244 in this CommonLibSF
+			// fork (calling it aborts the game), so read the stored value: hundredths, 100 = 1.0.
+			if (const auto rawScale = a_ref->scale; rawScale > 0 && rawScale <= 10000) {
+				sec.lines.push_back({ "Scale", std::format("{:.2f}", rawScale / 100.0) });
+			}
+			if (auto* cell = Safe::FormAs<RE::TESObjectCELL>(a_ref->parentCell)) {
+				sec.lines.push_back({ "Cell", std::format("{}{}", Describe(cell), cell->IsInterior() ? "  interior" : "  exterior") });
+				sec.lines.push_back({ "Cell from", DefiningFileName(cell->GetFormID()) });
+			}
+			if (Address::Get().location) {
+				if (auto* location = Safe::FormAs<RE::BGSLocation>(a_ref->GetCurrentLocation())) {
+					sec.lines.push_back({ "Location", Describe(location) });
+					if (settings.showLocationChain) {
+						std::vector<std::string> chain;
+						auto*                    parent = Safe::FormAs<RE::BGSLocation>(location->parentLocation.get());
+						for (int depth = 0; parent && depth < 8; ++depth) {
+							auto name = Name(parent);
+							chain.push_back(name.empty() ? EditorID(parent) : name);
+							parent = Safe::FormAs<RE::BGSLocation>(parent->parentLocation.get());
+						}
+						if (!chain.empty()) {
+							sec.lines.push_back({ "Inside", Join(chain, " > ") });
+						}
+					}
+				}
+			}
+			if (settings.showBounds) {
+				const auto min = a_ref->GetBoundMin();
+				const auto max = a_ref->GetBoundMax();
+				sec.lines.push_back({ "Size", std::format("{:.1f} x {:.1f} x {:.1f}", max.x - min.x, max.y - min.y, max.z - min.z) });
+			}
+			if (settings.showGravity) {
+				sec.lines.push_back({ "Gravity", std::format("scale {:.2f}{}", a_ref->GetGravityScale(), a_ref->IsInZeroGravity() ? ", zero-g" : "") });
+			}
+			a_out.push_back(std::move(sec));
+		}
 	}
 
 	std::string DefiningFileName(RE::TESFormID a_formID)
@@ -141,7 +663,6 @@ namespace MIC
 		if (top == 0xFF) {
 			return "(created in save)";
 		}
-
 		if (!Address::Get().dataHandler) {
 			return {};
 		}
@@ -170,9 +691,10 @@ namespace MIC
 			return sections;
 		}
 
-		// Read the base object without copying the NiPointer: a copy's destructor would call
-		// TESForm::DecRefCount, one more engine function to depend on.
-		RE::TESBoundObject* base = a_ref->data.objectReference.get();
+		// Read the base object without copying the NiPointer (a copy's destructor calls
+		// TESForm::DecRefCount), and only trust it if the form table agrees it is a form.
+		auto* base = static_cast<RE::TESBoundObject*>(Safe::Form(a_ref->data.objectReference.get()));
+		auto* actor = a_ref->As<RE::Actor>();
 
 		if (settings.showReference) {
 			InfoSection ref{ "Reference", {} };
@@ -204,44 +726,37 @@ namespace MIC
 					sec.lines.push_back({ "Model", model });
 				}
 			}
+			if (settings.showKeywords && settings.maxKeywords > 0) {
+				if (const auto kws = Keywords(base, settings.maxKeywords); !kws.empty()) {
+					sec.lines.push_back({ "Keywords", kws });
+				}
+			}
 			if (settings.showEngineDetails) {
 				sec.lines.push_back({ "Engine", EngineDetails(base) });
 			}
 			sections.push_back(std::move(sec));
 		}
 
-		if (settings.showActor) {
-			if (auto* actor = a_ref->As<RE::Actor>()) {
-				InfoSection sec{ "Actor", {} };
-				if (auto* race = actor->race) {
-					sec.lines.push_back({ "Race", Describe(race) });
-					sec.lines.push_back({ "Race from", DefiningFileName(race->GetFormID()) });
-				}
-				if (!sec.lines.empty()) {
-					sections.push_back(std::move(sec));
-				}
+		if (actor) {
+			if (settings.showNPC) {
+				AddNPCSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
 			}
+			if (settings.showAI) {
+				AddAISection(sections, actor);
+			}
+			if (settings.showActorState || settings.showActorValues) {
+				AddExperimentalActor(sections, actor);
+			}
+		} else if (settings.showLock) {
+			AddLockSection(sections, a_ref);
+		}
+
+		if (settings.showInventory && settings.maxInventoryItems > 0) {
+			AddInventorySection(sections, a_ref);
 		}
 
 		if (settings.showPosition) {
-			InfoSection sec{ "Position", {} };
-			sec.lines.push_back({ "Position", Point(a_ref->GetPosition()) });
-			sec.lines.push_back({ "Rotation", Point(a_ref->GetAngle(), kRadToDeg) + " deg" });
-			// TESObjectREFR::GetScale has no Address Library ID for 1.16.244 in this CommonLibSF
-			// fork (calling it aborts the game), so read the stored value: hundredths, 100 = 1.0.
-			if (const auto rawScale = a_ref->scale; rawScale > 0 && rawScale <= 10000) {
-				sec.lines.push_back({ "Scale", std::format("{:.2f}", rawScale / 100.0) });
-			}
-			if (auto* cell = a_ref->parentCell) {
-				sec.lines.push_back({ "Cell", std::format("{}{}", Describe(cell), cell->IsInterior() ? "  interior" : "  exterior") });
-				sec.lines.push_back({ "Cell from", DefiningFileName(cell->GetFormID()) });
-			}
-			if (Address::Get().location) {
-				if (auto* location = a_ref->GetCurrentLocation()) {
-					sec.lines.push_back({ "Location", Describe(location) });
-				}
-			}
-			sections.push_back(std::move(sec));
+			AddPositionSection(sections, a_ref);
 		}
 
 		return sections;
@@ -255,7 +770,7 @@ namespace MIC
 			if (!out.empty()) {
 				out += "<br>";
 			}
-			out += std::format("<font color='#{:06X}'><b>{}</b></font><br>", settings.headerColor & 0xFFFFFF, EscapeHTML(section.title));
+			out += std::format("<font color='#{:06X}'>{}</font><br>", settings.headerColor & 0xFFFFFF, EscapeHTML(section.title));
 			for (const auto& line : section.lines) {
 				out += std::format("<font color='#{:06X}'>{}:</font> {}<br>", settings.labelColor & 0xFFFFFF,
 					EscapeHTML(line.label), EscapeHTML(line.value));

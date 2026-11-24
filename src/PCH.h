@@ -4,14 +4,19 @@
 #include <SFSE/SFSE.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cwctype>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 using namespace std::literals;
