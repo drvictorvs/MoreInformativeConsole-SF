@@ -40,7 +40,7 @@ namespace MIC
 				{ "Panel", "fWidthPercent", "widthPercent", Kind::Double, &s.widthPercent, 10, 100 },
 				{ "Panel", "fScale", "panelScale", Kind::Double, &s.panelScale, 0.25, 4 },
 				{ "Panel", "iFontSize", "fontSize", Kind::UInt, &s.fontSize, 0, 96 },
-				{ "Panel", "fMargin", nullptr, Kind::Double, &s.margin },
+				{ "Panel", "fMargin", "margin", Kind::Double, &s.margin, 0.0, 200.0 },
 				{ "Panel", "fOffsetX", "offsetX", Kind::Double, &s.offsetX },
 				{ "Panel", "fOffsetY", "offsetY", Kind::Double, &s.offsetY },
 				{ "Panel", "iBackgroundColor", "backgroundColor", Kind::Color, &s.backgroundColor },

@@ -19,7 +19,7 @@ namespace MIC
 		double        widthPercent{ 40.0 };
 		double        panelScale{ 1.0 };
 		std::uint32_t fontSize{ 0 };  // 0 = console's own size
-		double        margin{ 8.0 };
+		double        margin{ 16.0 };
 		double        offsetX{ 0.0 };
 		double        offsetY{ 0.0 };
 		std::uint32_t backgroundColor{ 0x000000 };
