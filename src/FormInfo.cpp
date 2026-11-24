@@ -11,6 +11,32 @@ namespace MIC
 	{
 		constexpr float kRadToDeg = 57.29577951308232f;
 
+		// Per-part timing for bDebugLog: which part of collecting the panel's data is slow.
+		std::vector<std::pair<const char*, long long>>& Timings()
+		{
+			static std::vector<std::pair<const char*, long long>> timings;
+			return timings;
+		}
+
+		struct ScopedTimer
+		{
+			explicit ScopedTimer(const char* a_name) :
+				name(a_name), start(std::chrono::steady_clock::now()) {}
+			~ScopedTimer()
+			{
+				const auto us = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
+				for (auto& [n, total] : Timings()) {
+					if (n == name) {
+						total += us;
+						return;
+					}
+				}
+				Timings().emplace_back(name, us);
+			}
+			const char*                           name;
+			std::chrono::steady_clock::time_point start;
+		};
+
 		// ---- small helpers ------------------------------------------------------------------------
 
 		std::string Hex(RE::TESFormID a_id) { return std::format("{:08X}", a_id); }
@@ -27,11 +53,13 @@ namespace MIC
 
 		std::string EditorID(const RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "editor IDs" };
 			return a_form ? Safe::CString(a_form->GetFormEditorID()) : std::string();
 		}
 
 		std::string Name(RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "names" };
 			if (!a_form) {
 				return {};
 			}
@@ -90,6 +118,7 @@ namespace MIC
 
 		void AddFileLines(InfoSection& a_section, const RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "plugin names" };
 			const auto defined = DefiningFileName(a_form->GetFormID());
 			const auto last = LastFileName(a_form);
 			a_section.lines.push_back({ "Defined in", defined.empty() ? "unknown" : defined });
@@ -111,6 +140,7 @@ namespace MIC
 
 		std::string Flags(const RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "flags" };
 			std::vector<std::string> flags;
 			if (a_form->IsPersistent()) flags.emplace_back("persistent");
 			if (a_form->IsDisabled()) flags.emplace_back("disabled");
@@ -126,6 +156,7 @@ namespace MIC
 
 		std::string Model(RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "model" };
 			if (auto* model = starfield_cast<RE::TESModel*>(a_form)) {
 				return Safe::FixedString(&model->model);
 			}
@@ -134,6 +165,7 @@ namespace MIC
 
 		std::string EngineDetails(const RE::TESForm* a_form)
 		{
+			ScopedTimer timer{ "engine details" };
 			char buffer[512]{};
 			a_form->GetFormDetailedString(buffer, sizeof(buffer));
 			buffer[sizeof(buffer) - 1] = '\0';
@@ -974,6 +1006,13 @@ namespace MIC
 	{
 		const auto&              settings = Settings::Get();
 		std::vector<InfoSection> sections;
+		Timings().clear();
+		Safe::QueryCount() = 0;
+		Safe::BeginBatch();
+		struct EndBatch
+		{
+			~EndBatch() { Safe::BeginBatch(); }  // nothing remembered outlives this collection
+		} endBatch;
 		if (!a_ref) {
 			return sections;
 		}
@@ -984,6 +1023,7 @@ namespace MIC
 		auto* actor = a_ref->As<RE::Actor>();
 
 		if (settings.showReference) {
+			ScopedTimer timer{ "[Reference]" };
 			InfoSection ref{ "Reference", {} };
 			ref.lines.push_back({ "Name", Name(a_ref).empty() ? "(no name)" : Name(a_ref) });
 			ref.lines.push_back({ "Ref ID", std::format("{}  ({})", Hex(a_ref->GetFormID()), TypeName(a_ref)) });
@@ -1001,6 +1041,7 @@ namespace MIC
 		}
 
 		if (settings.showBase && base) {
+			ScopedTimer timer{ "[Base object]" };
 			InfoSection sec{ "Base object", {} };
 			sec.lines.push_back({ "Name", Name(base).empty() ? "(no name)" : Name(base) });
 			sec.lines.push_back({ "Base ID", std::format("{}  ({})", Hex(base->GetFormID()), TypeName(base)) });
@@ -1017,6 +1058,7 @@ namespace MIC
 				AddSwapLines(sec, starfield_cast<RE::TESModel*>(base), "Material swap");
 			}
 			if (settings.showKeywords && settings.maxKeywords > 0) {
+				ScopedTimer kwTimer{ "keywords" };
 				if (const auto kws = Keywords(base, settings.maxKeywords); !kws.empty()) {
 					sec.lines.push_back({ "Keywords", kws });
 				}
@@ -1029,30 +1071,62 @@ namespace MIC
 
 		if (actor) {
 			if (settings.showNPC) {
-				AddNPCSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
+				{
+					ScopedTimer timer{ "[NPC]" };
+					AddNPCSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
+				}
 			}
 			if (settings.showAI) {
-				AddAISection(sections, actor);
+				{
+					ScopedTimer timer{ "[AI]" };
+					AddAISection(sections, actor);
+				}
 			}
 			if (settings.showWorn) {
-				AddWornSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
+				{
+					ScopedTimer timer{ "[Worn]" };
+					AddWornSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
+				}
 			}
 			if (settings.showActorState || settings.showActorValues) {
-				AddExperimentalActor(sections, actor);
+				{
+					ScopedTimer timer{ "[Actor experimental]" };
+					AddExperimentalActor(sections, actor);
+				}
 			}
 		} else if (settings.showLock) {
-			AddLockSection(sections, a_ref);
+			{
+				ScopedTimer timer{ "[Lock]" };
+				AddLockSection(sections, a_ref);
+			}
 		}
 
 		if (settings.showInventory && settings.maxInventoryItems > 0) {
-			AddInventorySection(sections, a_ref);
+			{
+				ScopedTimer timer{ "[Inventory]" };
+				AddInventorySection(sections, a_ref);
+			}
 		}
 
 		if (settings.showPosition) {
-			AddPositionSection(sections, a_ref);
+			{
+				ScopedTimer timer{ "[Position]" };
+				AddPositionSection(sections, a_ref);
+			}
 		}
 
 		return sections;
+	}
+
+	std::string LastCollectTimings()
+	{
+		std::string out;
+		for (const auto& [name, us] : Timings()) {
+			if (us >= 1000) {
+				out += std::format("{}{} {} ms", out.empty() ? "" : ", ", name, us / 1000);
+			}
+		}
+		return std::format("{}; {} memory checks", out.empty() ? "no part over 1 ms" : out, Safe::QueryCount());
 	}
 
 	std::string RenderHTML(const std::vector<InfoSection>& a_sections)

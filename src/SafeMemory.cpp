@@ -10,6 +10,49 @@ namespace MIC::Safe
 		constexpr std::uint32_t kGuardOrNoCache = 0x100u /* PAGE_GUARD */;
 	}
 
+	std::uint64_t& QueryCount()
+	{
+		static std::uint64_t count = 0;
+		return count;
+	}
+
+	namespace
+	{
+		// Readable regions already confirmed during the current collection. VirtualQuery is slow in
+		// a process this large, and most of what the panel reads lives in a few heap regions.
+		struct Region
+		{
+			std::uintptr_t begin;
+			std::uintptr_t end;
+		};
+		std::array<Region, 64> g_regions{};
+		std::size_t            g_regionCount = 0;
+		std::size_t            g_regionNext = 0;
+
+		bool InKnownRegion(std::uintptr_t a_begin, std::uintptr_t a_end)
+		{
+			for (std::size_t i = 0; i < g_regionCount; ++i) {
+				if (a_begin >= g_regions[i].begin && a_end <= g_regions[i].end) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		void Remember(std::uintptr_t a_begin, std::uintptr_t a_end)
+		{
+			g_regions[g_regionNext] = { a_begin, a_end };
+			g_regionNext = (g_regionNext + 1) % g_regions.size();
+			g_regionCount = std::min(g_regionCount + 1, g_regions.size());
+		}
+	}
+
+	void BeginBatch()
+	{
+		g_regionCount = 0;
+		g_regionNext = 0;
+	}
+
 	bool Readable(const void* a_ptr, std::size_t a_size)
 	{
 		const auto start = reinterpret_cast<std::uintptr_t>(a_ptr);
@@ -17,20 +60,26 @@ namespace MIC::Safe
 			return false;
 		}
 		const auto end = start + a_size;
+		if (InKnownRegion(start, end)) {
+			return true;
+		}
 
 		auto address = start;
 		while (address < end) {
 			REX::W32::MEMORY_BASIC_INFORMATION info{};
+			++QueryCount();
 			if (REX::W32::VirtualQuery(reinterpret_cast<const void*>(address), &info, sizeof(info)) != sizeof(info)) {
 				return false;
 			}
 			if (info.state != REX::W32::MEM_COMMIT || (info.protect & kGuardOrNoCache) || !(info.protect & kReadableMask)) {
 				return false;
 			}
-			const auto regionEnd = reinterpret_cast<std::uintptr_t>(info.baseAddress) + info.regionSize;
+			const auto regionBegin = reinterpret_cast<std::uintptr_t>(info.baseAddress);
+			const auto regionEnd = regionBegin + info.regionSize;
 			if (regionEnd <= address) {
 				return false;
 			}
+			Remember(regionBegin, regionEnd);
 			address = regionEnd;
 		}
 		return true;

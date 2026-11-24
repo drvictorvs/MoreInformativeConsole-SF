@@ -6,6 +6,13 @@
 
 namespace MIC::Safe
 {
+	// Forgets the readable regions remembered so far. Call at the start of each collection: memory
+	// can be freed between refreshes, but not while one collection runs on the game thread.
+	void BeginBatch();
+
+	// Number of VirtualQuery calls made so far (for bDebugLog timing).
+	std::uint64_t& QueryCount();
+
 	// True when [a_ptr, a_ptr + a_size) is committed, readable, non-guard memory.
 	bool Readable(const void* a_ptr, std::size_t a_size);
 

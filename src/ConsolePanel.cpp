@@ -335,10 +335,10 @@ namespace MIC::ConsolePanel
 				using us = std::chrono::microseconds;
 				const auto total = std::chrono::duration_cast<us>(t3 - t0).count();
 				if (changed || total > 2000) {
-					REX::INFO("Timing: collect {} us, text {} us{}, layout {} us",
+					REX::INFO("Timing: collect {} us, text {} us{}, layout {} us; {}",
 						std::chrono::duration_cast<us>(t1 - t0).count(),
 						std::chrono::duration_cast<us>(t2 - t1).count(), changed ? " (changed)" : "",
-						std::chrono::duration_cast<us>(t3 - t2).count());
+						std::chrono::duration_cast<us>(t3 - t2).count(), LastCollectTimings());
 				}
 			}
 		}
