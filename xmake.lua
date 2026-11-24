@@ -28,6 +28,7 @@ target("MoreInformativeConsoleSF", function()
     add_headerfiles("src/**.h")
     add_includedirs("src")
     set_pcxxheader("src/PCH.h")
+    add_syslinks("user32")  -- GetAsyncKeyState, for the scroll keys
 
     add_installfiles("dist/Data/SFSE/Plugins/MoreInformativeConsoleSF.ini", { prefixdir = "SFSE/Plugins" })
     add_installfiles("dist/Data/SFSE/Plugins/OSF/Settings/schemas/moreinformativeconsole-sf.json", { prefixdir = "SFSE/Plugins/OSF/Settings/schemas" })
