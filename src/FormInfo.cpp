@@ -252,7 +252,10 @@ namespace MIC
 				sec.lines.push_back({ "Traits", Join(traits) });
 
 				if (flags.all(Flag::kPCLevelMult)) {
-					sec.lines.push_back({ "Level", std::format("scales with player, {}-{}", data.actorData.calcLevelMin, data.actorData.calcLevelMax) });
+					const auto min = data.actorData.calcLevelMin;
+					const auto max = data.actorData.calcLevelMax;
+					sec.lines.push_back({ "Level", max == 0 ? std::format("scales with player, at least {}", min)
+					                                        : std::format("scales with player, {} to {}", min, max) });
 				} else {
 					sec.lines.push_back({ "Level", std::to_string(data.actorData.level) });
 				}
@@ -371,8 +374,13 @@ namespace MIC
 				}
 				if (auto* package = Safe::FormAs<RE::TESPackage>(running->package)) {
 					sec.lines.push_back({ "Package", DescribeWithFile(package) });
-					sec.lines.push_back({ "Package info", std::format("type {}, procedure {}{}",
-						static_cast<int>(package->packageData.packageType), running->currentProcedureIndex,
+					// The procedure index is at +0x1C (CommonLibSF's ActorPackage puts it at 0x20, which holds
+					// the package's start time). Shown only when the value is a plausible index.
+					std::int32_t procedure = -1;
+					Safe::Read(reinterpret_cast<const std::byte*>(running) + 0x1C, procedure);
+					sec.lines.push_back({ "Package info", std::format("type {}{}{}",
+						static_cast<int>(package->packageData.packageType),
+						procedure >= 0 && procedure < 256 ? std::format(", step {}", procedure) : "",
 						runOnce ? ", run-once override" : "") });
 					if (runOnce) {
 						if (auto* normal = Safe::FormAs<RE::TESPackage>(process->currentPackage.package)) {
@@ -1139,6 +1147,10 @@ namespace MIC
 			}
 			out += std::format("<font color='#{:06X}'>{}</font><br>", settings.headerColor & 0xFFFFFF, EscapeHTML(section.title));
 			for (const auto& line : section.lines) {
+				if (line.label.find_first_not_of(' ') == std::string::npos) {
+					out += std::format("&nbsp;&nbsp;&nbsp;&nbsp;{}<br>", EscapeHTML(line.value));  // continues the line above
+					continue;
+				}
 				out += std::format("<font color='#{:06X}'>{}:</font> {}<br>", settings.labelColor & 0xFFFFFF,
 					EscapeHTML(line.label), EscapeHTML(line.value));
 			}
@@ -1152,6 +1164,10 @@ namespace MIC
 		for (const auto& section : a_sections) {
 			out += std::format("-- {} --\n", section.title);
 			for (const auto& line : section.lines) {
+				if (line.label.find_first_not_of(' ') == std::string::npos) {
+					out += std::format("      {}\n", line.value);
+					continue;
+				}
 				out += std::format("  {}: {}\n", line.label, line.value);
 			}
 		}
