@@ -31,6 +31,9 @@
       { "key": "showNPC", "type": "bool", "label": "NPC (race, traits, level)", "default": true },
       { "key": "showFactions", "type": "bool", "label": "Factions and ranks", "default": true },
       { "key": "showAI", "type": "bool", "label": "AI and animation (package, idle, furniture, dialogue)", "default": true },
+      { "key": "showWorn", "type": "bool", "label": "Worn items and biped slots", "default": true },
+      { "key": "maxWornItems", "type": "int", "label": "Worn items shown", "default": 16, "min": 1, "max": 64 },
+      { "key": "showWornModels", "type": "bool", "label": "Armor addon and model for each worn item", "default": true },
       { "key": "showLock", "type": "bool", "label": "Lock", "default": true },
       { "key": "showInventory", "type": "bool", "label": "Inventory", "default": true },
       { "key": "maxInventoryItems", "type": "int", "label": "Inventory items shown", "default": 8, "min": 1, "max": 60 },
@@ -38,6 +41,9 @@
       { "key": "showLocationChain", "type": "bool", "label": "Parent locations", "default": true }
     ],
     "Experimental": [
+      { "key": "showMaterialSwaps", "type": "bool", "label": "Material swaps (base model and worn addons)", "default": false,
+        "hint": "Calls the game's material swap lookup. Found for this mod and not yet confirmed in game." },
+      { "key": "maxSwapEntries", "type": "int", "label": "Material swap entries shown per form", "default": 6, "min": 1, "max": 64 },
       { "key": "showActorState", "type": "bool", "label": "Actor state (combat, talking, scene)", "default": false,
         "hint": "Not yet confirmed on this game version. If enabling an experimental option crashes the game, turn it off and report it." },
       { "key": "showActorValues", "type": "bool", "label": "Actor values (health, oxygen, AI values)", "default": false,

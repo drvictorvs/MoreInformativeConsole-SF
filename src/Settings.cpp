@@ -60,8 +60,13 @@ namespace MIC
 				{ "Content", "bShowInventory", "showInventory", Kind::Bool, &s.showInventory },
 				{ "Content", "iMaxInventoryItems", "maxInventoryItems", Kind::UInt, &s.maxInventoryItems, 0, 200 },
 				{ "Content", "bShowAI", "showAI", Kind::Bool, &s.showAI },
+				{ "Content", "bShowWorn", "showWorn", Kind::Bool, &s.showWorn },
+				{ "Content", "iMaxWornItems", "maxWornItems", Kind::UInt, &s.maxWornItems, 0, 64 },
+				{ "Content", "bShowWornModels", "showWornModels", Kind::Bool, &s.showWornModels },
 
 				{ "Experimental", "bShowActorState", "showActorState", Kind::Bool, &s.showActorState },
+				{ "Experimental", "bShowMaterialSwaps", "showMaterialSwaps", Kind::Bool, &s.showMaterialSwaps },
+				{ "Experimental", "iMaxSwapEntries", "maxSwapEntries", Kind::UInt, &s.maxSwapEntries, 0, 64 },
 				{ "Experimental", "bShowActorValues", "showActorValues", Kind::Bool, &s.showActorValues },
 				{ "Experimental", "bShowBounds", "showBounds", Kind::Bool, &s.showBounds },
 				{ "Experimental", "bShowGravity", "showGravity", Kind::Bool, &s.showGravity },

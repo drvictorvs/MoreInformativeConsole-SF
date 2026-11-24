@@ -26,6 +26,7 @@ namespace MIC::Address
 		bool furniture{ false };     // handle lookup + TESForm::DecRefCount: furniture in use
 		bool actorValues{ false };   // ActorValue::GetSingleton: experimental actor values
 		bool lockDetails{ false };   // GameIDs.h lock getter, area level and lock-level settings
+		bool materialSwaps{ false }; // GameIDs.h material swap lookup
 	};
 
 	// Runs the check the first time; afterwards returns the cached result.

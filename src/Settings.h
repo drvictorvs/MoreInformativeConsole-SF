@@ -40,9 +40,14 @@ namespace MIC
 		bool          showInventory{ true };
 		std::uint32_t maxInventoryItems{ 8 };
 		bool          showAI{ true };
+		bool          showWorn{ true };
+		std::uint32_t maxWornItems{ 16 };
+		bool          showWornModels{ true };
 
 		// Experimental: calls through the game's function tables; confirm in game before relying on them
 		bool        showActorState{ false };
+		bool        showMaterialSwaps{ false };
+		std::uint32_t maxSwapEntries{ 6 };
 		bool        showActorValues{ false };
 		bool        showBounds{ false };
 		bool        showGravity{ false };

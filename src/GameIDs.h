@@ -40,4 +40,28 @@ namespace MIC::GameID
 		{ REL::ID{ 887899 }, REL::ID{ 820353 } },  // iLockLevelMaxImpossible 255,   sLockLevelNameImpossible ("Requires Key")
 	};
 	inline constexpr std::size_t kLockImpossible = 8;
+
+	// Material swaps. void (const TESModel* component, Visitor* visitor, bool create).
+	// Looks the model component up in the engine's global swap map under a write lock and, if found
+	// (or create is true), calls visitor->vtable[1](visitor, const Array* swaps). Array is
+	// { u32 size; u32 capacity; void** data }: BGSLayeredMaterialSwap* items. Called with
+	// create=false by TESModel code (ID 47640) and with true by the model loader (ID 47645).
+	inline constexpr REL::ID GetModelMaterialSwaps{ 47660 };
+
+	// Layouts confirmed on 1.16.244 that differ from the CommonLibSF fork (TESObject is 0x50 here, so
+	// members after it move 8 bytes). Read only through SafeMemory.
+	namespace Layout
+	{
+		inline constexpr std::size_t ARMO_BipedSlots = 0x208;      // u64 bit mask (fork: 0x238)
+		inline constexpr std::size_t ARMO_Addons = 0x310;          // BSTArray<{u16 index; TESObjectARMA*}>, 0x10 each
+		inline constexpr std::size_t ARMA_Race = 0x58;             // TESRace* (TESRaceForm at 0x50)
+		inline constexpr std::size_t ARMA_BipedSlots = 0x68;       // u64 bit mask (fork: 0x60)
+		inline constexpr std::size_t ARMA_BipedModel[2] = { 0x90, 0xB8 };  // BGSModelMaterialSwap, male/female
+		inline constexpr std::size_t ARMA_AdditionalRaces = 0x230;  // BSTArray<TESRace*> (fork 0x228 + 8, unconfirmed)
+		inline constexpr std::size_t TESModel_Path = 0x08;          // BSFixedString
+		inline constexpr std::size_t LMSW_Entries = 0x50;          // BSTArray<Entry>
+		inline constexpr std::size_t LMSW_EntrySize = 0x1C0;
+		inline constexpr std::size_t LMSW_Entry_Key = 0x00;        // BSFixedString (material being replaced)
+		inline constexpr std::size_t LMSW_Entry_Override = 0x10;   // BSFixedString (OverrideMaterialPath)
+	}
 }

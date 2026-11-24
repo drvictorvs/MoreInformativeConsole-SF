@@ -10,8 +10,9 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 | AI & animation | Running AI package (and the normal one under a run-once override), package type and step, queued idle with its animation event, graph and file, furniture in use, the line being spoken, follower command, light level |
 | Lock | Locked or not; the game's own category name and level (e.g. "Requires Key (255)", "Hard (60, leveled: base 40 + area level 20 x 1)"); locks shared from the linked door; key |
 | Inventory | Kinds and total count, first N items with counts, equipped marked `[E]` |
+| Worn (actors) | Biped slots in use and any overlap; each worn item with its slot bits; the armor addon picked for the actor's race and its model path for the actor's sex |
 | Position | Coordinates, rotation, scale, cell and its plugin, location, parent locations |
-| Experimental (off by default) | Combat, invulnerable, talking, scene; health, oxygen, carry weight, speed and AI values; animation graph variables you name; object size; gravity; engine debug text |
+| Experimental (off by default) | Combat, invulnerable, talking, scene; health, oxygen, carry weight, speed and AI values; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
 
 Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. Menu changes apply right away, the next time the console panel refreshes.
 
@@ -37,11 +38,12 @@ So at load, `AddressCheck.cpp` checks every ID the plugin can reach, directly or
 | `ConsoleLog` | `bPrintToConsole` is ignored. |
 | `TESObjectREFR::GetCurrentLocation` | No "Location" line. |
 | `TESDataHandler` | "Defined in" shows `unknown`. |
-| `BSReadWriteLock` read lock | No Inventory or Lock section. |
+| `BSReadWriteLock` read lock | No Inventory, Worn or Lock section. |
 | `Actor::GetFactionRank` | Factions show base ranks only. |
 | Handle lookup or `TESForm::DecRefCount` | No Furniture line. |
 | `ActorValue::GetSingleton` | No actor values (experimental). |
 | Lock IDs in `GameIDs.h` (lock getter, area level, lock-level settings) | Lock shows the raw level only, and only the reference's own lock. |
+| Material swap lookup in `GameIDs.h` | No material swaps (experimental). |
 
 The log lists each missing ID and ends with an `Address check:` line giving each feature `true` or `false`.
 

@@ -681,6 +681,293 @@ namespace MIC
 			return index < files.mediumFiles.size() ? FileName(files.mediumFiles[index]) : std::string();
 		}
 		return top < files.files.size() ? FileName(files.files[top]) : std::string();
+		// ---- biped slots, armor addons, material swaps --------------------------------------------
+		// Offsets come from GameID::Layout (confirmed on 1.16.244; several differ from the fork), so
+		// every read goes through SafeMemory and every pointer is checked against the form table.
+
+		namespace L = GameID::Layout;
+
+		const std::byte* At(const void* a_base, std::size_t a_offset)
+		{
+			return static_cast<const std::byte*>(a_base) + a_offset;
+		}
+
+		// The engine's array header: { u32 size; u32 capacity; T* data }.
+		struct RawArray
+		{
+			std::uint32_t    size;
+			std::uint32_t    capacity;
+			const std::byte* data;
+		};
+		static_assert(sizeof(RawArray) == 0x10);
+
+		bool ReadRawArray(const void* a_address, std::size_t a_stride, std::size_t a_max, RawArray& a_out)
+		{
+			return Safe::Read(a_address, a_out) && a_out.size > 0 && a_out.size <= a_max && a_out.data &&
+			       Safe::Readable(a_out.data, a_out.size * a_stride);
+		}
+
+		std::uint64_t ReadMask(const void* a_form, std::size_t a_offset)
+		{
+			std::uint64_t mask = 0;
+			Safe::Read(At(a_form, a_offset), mask);
+			return mask;
+		}
+
+		// Biped slot bit indices, e.g. "3, 5, 33".
+		std::string SlotList(std::uint64_t a_mask)
+		{
+			std::vector<std::string> bits;
+			for (std::uint32_t i = 0; i < 64; ++i) {
+				if (a_mask & (1ull << i)) {
+					bits.push_back(std::to_string(i));
+				}
+			}
+			return bits.empty() ? "none" : Join(bits);
+		}
+
+		std::string ShortName(RE::TESForm* a_form)
+		{
+			auto name = Name(a_form);
+			if (name.empty()) name = EditorID(a_form);
+			if (name.empty()) name = Hex(a_form->GetFormID());
+			return name;
+		}
+
+		// Receives the swap list from GameID::GetModelMaterialSwaps. The engine holds its write lock
+		// while calling Visit, so this only copies pointers into fixed storage: no allocation, no
+		// calls back into the game.
+		class SwapCollector
+		{
+		public:
+			virtual ~SwapCollector() = default;                // vtable slot 0
+			virtual void Visit(const RawArray* a_swaps)        // vtable slot 1
+			{
+				if (!a_swaps || !Safe::Readable(a_swaps, sizeof(RawArray))) {
+					return;
+				}
+				const auto n = std::min<std::uint32_t>(a_swaps->size, kMax);
+				if (n == 0 || !a_swaps->data || !Safe::Readable(a_swaps->data, n * sizeof(std::uintptr_t))) {
+					return;
+				}
+				std::memcpy(items.data(), a_swaps->data, n * sizeof(std::uintptr_t));
+				count = n;
+				total = a_swaps->size;
+			}
+
+			static constexpr std::uint32_t        kMax = 16;
+			std::array<std::uintptr_t, kMax> items{};
+			std::uint32_t                         count{ 0 };
+			std::uint32_t                         total{ 0 };
+		};
+
+		// Layered material swap forms attached to one model component (TESModel or a subclass).
+		std::vector<RE::TESForm*> MaterialSwapsOf(const void* a_model, std::uint32_t& a_total)
+		{
+			a_total = 0;
+			std::vector<RE::TESForm*> out;
+			if (!a_model || !Address::Get().materialSwaps || !Safe::Readable(a_model, 0x10)) {
+				return out;
+			}
+			using func_t = void(const void*, SwapCollector*, bool);
+			static REL::Relocation<func_t*> func{ GameID::GetModelMaterialSwaps };
+			SwapCollector collector;
+			func(a_model, &collector, false);  // false: never create an entry for a model that has none
+
+			a_total = collector.total;
+			for (std::uint32_t i = 0; i < collector.count; ++i) {
+				const auto item = collector.items[i];
+				// Pointers once data has loaded; accept a bare form ID too, just in case.
+				auto* form = Safe::Form(reinterpret_cast<const void*>(item));
+				if (!form && item != 0 && item <= 0xFFFFFFFF) {
+					form = Safe::Form(RE::TESForm::LookupByID(static_cast<RE::TESFormID>(item)));
+				}
+				if (form) {
+					out.push_back(form);
+				}
+			}
+			return out;
+		}
+
+		// "material -> override; ..." for one BGSLayeredMaterialSwap.
+		std::string SwapEntries(RE::TESForm* a_swap, std::uint32_t a_max)
+		{
+			if (a_swap->GetFormType() != RE::FormType::kLMSW || a_max == 0) {
+				return {};
+			}
+			RawArray entries{};
+			if (!ReadRawArray(At(a_swap, L::LMSW_Entries), L::LMSW_EntrySize, 4096, entries)) {
+				return "no entries";
+			}
+			std::vector<std::string> parts;
+			for (std::uint32_t i = 0; i < entries.size && parts.size() < a_max; ++i) {
+				const auto* entry = entries.data + i * L::LMSW_EntrySize;
+				auto from = Safe::FixedString(entry + L::LMSW_Entry_Key);
+				auto to = Safe::FixedString(entry + L::LMSW_Entry_Override);
+				if (from.empty() && to.empty()) {
+					continue;
+				}
+				parts.push_back(std::format("{} -> {}", from.empty() ? "?" : from, to.empty() ? "(none)" : to));
+			}
+			auto out = Join(parts, "; ");
+			if (entries.size > parts.size()) {
+				out += std::format("{}({} entries)", out.empty() ? "" : "; ... ", entries.size);
+			}
+			return out;
+		}
+
+		void AddSwapLines(InfoSection& a_sec, const void* a_model, std::string_view a_label)
+		{
+			const auto& settings = Settings::Get();
+			if (!settings.showMaterialSwaps) {
+				return;
+			}
+			std::uint32_t total = 0;
+			const auto    swaps = MaterialSwapsOf(a_model, total);
+			for (auto* swap : swaps) {
+				a_sec.lines.push_back({ std::string(a_label), DescribeWithFile(swap) });
+				if (const auto entries = SwapEntries(swap, settings.maxSwapEntries); !entries.empty()) {
+					a_sec.lines.push_back({ std::string(a_label.size(), ' '), entries });
+				}
+			}
+			if (total > swaps.size()) {
+				a_sec.lines.push_back({ std::string(a_label), std::format("... {} in all", total) });
+			}
+		}
+
+		bool AddonFitsRace(const void* a_arma, const RE::TESForm* a_race)
+		{
+			if (!a_race) {
+				return false;
+			}
+			const void* race = nullptr;
+			if (Safe::Read(At(a_arma, L::ARMA_Race), race) && race == a_race) {
+				return true;
+			}
+			RawArray extra{};
+			if (ReadRawArray(At(a_arma, L::ARMA_AdditionalRaces), sizeof(void*), 256, extra)) {
+				for (std::uint32_t i = 0; i < extra.size; ++i) {
+					const void* other = nullptr;
+					if (Safe::Read(extra.data + i * sizeof(void*), other) && other == a_race) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+		// The armor addon the engine would pick for this race (the first match), else the first one.
+		RE::TESForm* PickAddon(const void* a_armo, const RE::TESForm* a_race, std::uint32_t& a_count, bool& a_matched)
+		{
+			a_count = 0;
+			a_matched = false;
+			RawArray addons{};
+			if (!ReadRawArray(At(a_armo, L::ARMO_Addons), 0x10, 256, addons)) {
+				return nullptr;
+			}
+			RE::TESForm* first = nullptr;
+			for (std::uint32_t i = 0; i < addons.size; ++i) {
+				const void* ptr = nullptr;
+				Safe::Read(addons.data + i * 0x10 + 8, ptr);
+				auto* arma = Safe::Form(ptr);
+				if (!arma || arma->GetFormType() != RE::FormType::kARMA) {
+					continue;
+				}
+				++a_count;
+				if (!first) {
+					first = arma;
+				}
+				if (!a_matched && AddonFitsRace(arma, a_race)) {
+					first = arma;
+					a_matched = true;
+				}
+			}
+			return first;
+		}
+
+		void AddWornSection(std::vector<InfoSection>& a_out, RE::Actor* a_actor, RE::TESNPC* a_npc)
+		{
+			const auto& settings = Settings::Get();
+			if (!Address::Get().inventory || settings.maxWornItems == 0) {
+				return;
+			}
+			std::vector<RE::TESForm*> worn;
+			a_actor->ForEachInventoryItem([&](const RE::BGSInventoryItem& a_item) {
+				if (worn.size() >= 64) {
+					return RE::BSContainer::ForEachResult::kStop;
+				}
+				if (a_item.IsEquipped()) {
+					if (auto* object = Safe::Form(a_item.object)) {
+						worn.push_back(object);
+					}
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+			});
+			if (worn.empty()) {
+				return;
+			}
+
+			bool female = false;
+			if (a_npc && Safe::Readable(a_npc, sizeof(RE::TESNPC))) {
+				const RE::TESActorBaseData& data = *a_npc;
+				female = data.actorData.actorBaseFlags.all(RE::ACTOR_BASE_DATA::Flag::kFemale);
+			}
+			const auto* race = Safe::Form(a_actor->race);
+
+			InfoSection   sec{ "Worn", {} };
+			std::uint64_t covered = 0;
+			std::uint64_t overlap = 0;
+			std::size_t   shown = 0;
+			for (auto* object : worn) {
+				const bool isArmor = object->GetFormType() == RE::FormType::kARMO;
+				const auto mask = isArmor ? ReadMask(object, L::ARMO_BipedSlots) : 0;
+				overlap |= covered & mask;
+				covered |= mask;
+				if (shown >= settings.maxWornItems) {
+					continue;
+				}
+				++shown;
+				if (!isArmor) {
+					sec.lines.push_back({ ShortName(object), std::format("{} ({})", TypeName(object), Hex(object->GetFormID())) });
+					continue;
+				}
+				sec.lines.push_back({ ShortName(object), std::format("slots {}  ({}, {})", SlotList(mask), Hex(object->GetFormID()),
+					LastFileName(object).empty() ? DefiningFileName(object->GetFormID()) : LastFileName(object)) });
+				if (!settings.showWornModels) {
+					continue;
+				}
+				std::uint32_t count = 0;
+				bool          matched = false;
+				auto*         arma = PickAddon(object, race, count, matched);
+				if (!arma) {
+					continue;
+				}
+				const auto armaMask = ReadMask(arma, L::ARMA_BipedSlots);
+				sec.lines.push_back({ "  addon", std::format("{}{}{}{}", DescribeWithFile(arma),
+					armaMask != mask ? "  slots " + SlotList(armaMask) : "",
+					count > 1 ? std::format("  (1 of {})", count) : "",
+					matched ? "" : "  (no race match)") });
+				// The model for the actor's sex, falling back to the other one (many addons set only male).
+				const void* model = At(arma, L::ARMA_BipedModel[female ? 1 : 0]);
+				auto        path = Safe::FixedString(At(model, L::TESModel_Path));
+				if (path.empty()) {
+					model = At(arma, L::ARMA_BipedModel[female ? 0 : 1]);
+					path = Safe::FixedString(At(model, L::TESModel_Path));
+				}
+				if (!path.empty()) {
+					sec.lines.push_back({ "  model", path });
+				}
+				AddSwapLines(sec, model, "  swap");
+			}
+			sec.lines.insert(sec.lines.begin(), InfoLine{ "Slots used", covered ? SlotList(covered) : "none" });
+			if (overlap) {
+				sec.lines.insert(sec.lines.begin() + 1, InfoLine{ "Overlap", SlotList(overlap) });
+			}
+			if (worn.size() > shown) {
+				sec.lines.push_back({ "...", std::format("{} more", worn.size() - shown) });
+			}
+			a_out.push_back(std::move(sec));
+		}
 	}
 
 	std::vector<InfoSection> CollectReferenceInfo(RE::TESObjectREFR* a_ref)
@@ -726,6 +1013,9 @@ namespace MIC
 					sec.lines.push_back({ "Model", model });
 				}
 			}
+			if (settings.showMaterialSwaps) {
+				AddSwapLines(sec, starfield_cast<RE::TESModel*>(base), "Material swap");
+			}
 			if (settings.showKeywords && settings.maxKeywords > 0) {
 				if (const auto kws = Keywords(base, settings.maxKeywords); !kws.empty()) {
 					sec.lines.push_back({ "Keywords", kws });
@@ -743,6 +1033,9 @@ namespace MIC
 			}
 			if (settings.showAI) {
 				AddAISection(sections, actor);
+			}
+			if (settings.showWorn) {
+				AddWornSection(sections, actor, base ? base->As<RE::TESNPC>() : nullptr);
 			}
 			if (settings.showActorState || settings.showActorValues) {
 				AddExperimentalActor(sections, actor);

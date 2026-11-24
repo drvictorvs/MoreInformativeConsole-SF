@@ -164,11 +164,15 @@ namespace MIC::Address
 				f.lockDetails = ok;
 			}
 
+			f.materialSwaps = CheckGroup("Material swaps", {
+				{ GameID::GetModelMaterialSwaps, "GetModelMaterialSwaps (found for this mod)" },
+			});
+
 			if (!f.core) {
 				REX::ERROR("Core functions are missing for this game version; the plugin stays inactive");
 			}
-			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={}",
-				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails);
+			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={} materialSwaps={}",
+				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails, f.materialSwaps);
 			return f;
 		}
 	}

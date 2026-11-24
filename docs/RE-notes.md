@@ -64,6 +64,29 @@ settings are static objects `{?, value char*, name char*}`. Data files can repla
 Other settings seen: `fLockLevelBase` (obj `145ed9800`), `fLockLevelMult` (obj `145ed9820`, default -1.0),
 `fLockLevelAutoattemptPoints{Novice,Average,Hard,VeryHard}`.
 
+## Worn items, biped slots and armor addons
+
+`TESObject` is 0x50 on 1.16.244 (0x48 in the fork), so `TESObjectARMA` members after it are 8 bytes later than the fork says. Confirmed offsets (constants in `src/GameIDs.h`, `GameID::Layout`):
+
+| Field | Offset | Fork | How confirmed |
+|---|---|---|---|
+| ARMO biped slot mask (u64) | 0x208 | 0x238 | BOD2 load in ARMO Load |
+| ARMO addon list `BSTArray<{u16 index; TESObjectARMA*}>` | 0x310 (size), 0x318 (data) | same | entries 0x10, addon at +8 |
+| ARMA race (`TESRaceForm` at 0x50) | 0x58 | 0x50 | component layout |
+| ARMA biped slot mask (u64) | 0x68 | 0x60 | BOD2 load in ARMA Load |
+| ARMA male / female biped model (`BGSModelMaterialSwap`, 0x28 each) | 0x90 / 0xB8 | 0x88 / 0xB0 | ARMA Load (ID 61147): the MOD2 branch passes `arma+0x90` and the MOD3 branch `arma+0xB8` to the model loaders (IDs 47641, 47645) |
+| ARMA additional races | 0x230 | 0x228 | assumed (+8), unconfirmed |
+| `TESModel::model` (BSFixedString) | 0x08 | same | setter ID 47641 writes `[this+8]` |
+
+The worn flag is the inventory item's `flags & 7`, as in the fork. Slot numbers in the panel are bit indices (0-63).
+
+## Material swaps
+
+- `GetModelMaterialSwaps` (ID 47660, `0x1405F1F10`): `void (const TESModel* component, Visitor* visitor, bool create)`. Takes the global swap map's write lock, looks the component up (the key is the component's address), and if found (or `create`) calls `visitor->vtable[1](visitor, const Array*)`, then unlocks. Array is `{ u32 size; u32 capacity; BGSLayeredMaterialSwap** data }`.
+- Callers: TESModel code (ID 47640) with `create = false`; the model loader (ID 47645) with `create = true` while reading swap subrecords. The mod calls it with `false` and its visitor only copies the pointers, because the lock is held during the call.
+- `BGSLayeredMaterialSwap` (LMSW, form type 0xC6): entries `BSTArray` at +0x50, 0x1C0 bytes each: key material BSFixedString at +0x00, `KeyMaterialPathForm` at +0x08, `OverrideMaterialPath` BSFixedString at +0x10.
+- Not done yet: the reference's own `ExtraMaterialSwap` (0xB5, XMSP) and the swaps the renderer actually applied to the loaded 3D.
+
 ## Contributing to CommonLibSF
 
 `libxse/commonlibsf` (which OSF's fork syncs from) still has both at 0 in `include/RE/IDs.h`:
