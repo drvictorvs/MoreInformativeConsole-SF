@@ -98,6 +98,19 @@ Most form types in Starfield don't keep their editor ID on the form (`GetFormEdi
 
 The mod walks the map once, under its read lock, and keeps the editor IDs of factions, packages, quests and material swaps by form ID.
 
+## Active magic effects
+
+From the `HasMagicEffect` condition (ID 65160), which calls the list walker ID 1016564:
+
+- `Actor`'s `MagicTarget` is at +0xD8 (RTTI; `Actor` vtable slot 0x4E0, ID 101882, returns `this + 0xD8`).
+- `MagicTarget` vtable slot 8 (ID 101877, both `Actor` and `PlayerCharacter`): the active effect list is at `process(+0x150) -> middleHigh(+8) + 0x238`, i.e. inside `MiddleHighProcessData`.
+- List: `BSReadWriteLock` at +0, then `{ u32 size; u32 capacity; ActiveEffect** data }` at +8 (reference-counted pointers; the walker copies them under the read lock).
+- `ActiveEffect`: caster `ObjectRefHandle` +0x44 (resolved by `GetCasterActor`'s helper, ID 96315), source +0x58, `EffectItem*` +0x60 (its +0x10 is the `EffectSetting`), elapsed seconds +0x80, duration +0x84 (timer update, ID 96332), magnitude +0x88 (returned by ID 96342 when flag 0x200 is set), flags +0x8C.
+
+## Default objects and the cosmetic toggles
+
+Default objects are `BGSDefaultObject` (DFOB) forms whose editor ID is the default object's name, so `TESForm::LookupByEditorID` (ID 47403) finds them; `object` (+0x48) points to the target form. The hide-spacesuit and hide-helmet actor values are reached through `ActorShouldHideSpacesuitCosmeticSettlementAV_DO` and `ActorShouldHideSpacesuitHelmetCosmeticBreathableAV_DO` (names from the executable).
+
 ## Contributing to CommonLibSF
 
 `libxse/commonlibsf` (which OSF's fork syncs from) still has both at 0 in `include/RE/IDs.h`:
