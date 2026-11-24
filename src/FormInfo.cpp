@@ -333,9 +333,8 @@ namespace MIC
 						if (!faction) {
 							continue;
 						}
-						const auto  edid = EditorID(faction);
-						std::string text = edid.empty() ? std::format("{} {}", Hex(faction->GetFormID()), entry.rank)
-						                                : std::format("{} ({}) {}", edid, Hex(faction->GetFormID()), entry.rank);
+						// "Name [EDID] (form ID) rank", skipping whichever of name and editor ID is missing.
+						std::string text = std::format("{} {}", Describe(faction), entry.rank);
 						if (Address::Get().factionRank) {
 							const auto live = a_actor->GetFactionRank(faction, a_actor->GetFormID() == 0x14);
 							if (live != entry.rank) {
