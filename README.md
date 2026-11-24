@@ -17,7 +17,7 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 
 Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. When the information is taller than the screen (or a maximum height you set), the panel scrolls with PageUp/PageDown (lines per step and repeat speed are adjustable), or with the mouse wheel if you turn that on. Tab shows or hides the panel while the console is open (the key can be changed or turned off). Menu changes apply right away, the next time the console panel refreshes.
 
-Status: 1.2 is confirmed in game and released on Nexus Mods. 
+Status: 1.3 is confirmed in game.
 
 ## How it works (and how it differs from the Skyrim mod)
 
