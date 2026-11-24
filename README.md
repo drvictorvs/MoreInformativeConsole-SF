@@ -14,9 +14,9 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 | Position | Coordinates, rotation, scale, cell and its plugin, location, parent locations |
 | Experimental (off by default) | Combat, invulnerable, talking, scene; actor values, each optional (health, oxygen, carry weight, speed, AI values, the hide-spacesuit and hide-helmet toggles, and any others you name by editor ID), shown as current value and base, on one line or as a list; active magic effects with their source, caster, magnitude and time left; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
 
-Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. Menu changes apply right away, the next time the console panel refreshes.
+Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. When the information is taller than the screen (or a maximum height you set), the panel scrolls with the mouse wheel or PageUp/PageDown. Menu changes apply right away, the next time the console panel refreshes.
 
-Status: 1.1.0 in development, not yet confirmed in game. 1.0 (the 0.1.1 code) is confirmed in game and released on Nexus Mods. 0.1.0 stopped the game with an Address Library error because it called `TESObjectREFR::GetScale`, whose ID is a 0 placeholder in this CommonLibSF fork; 0.1.1 read the stored scale instead and added the safety check below. 1.1.0 adds the sections above, the OSF Settings menu, and a Lock section built on functions and settings found by reverse-engineering 1.16.244 (see `docs/RE-notes.md`).
+Status: 1.2 is confirmed in game and released on Nexus Mods. 
 
 ## How it works (and how it differs from the Skyrim mod)
 

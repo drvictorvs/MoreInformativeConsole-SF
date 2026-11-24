@@ -37,6 +37,11 @@ namespace MIC
 
 				{ "Panel", "bAlignRight", "alignment", Kind::Align, &s.alignRight },
 				{ "Panel", "bOverConsole", "overConsole", Kind::Bool, &s.overConsole },
+				{ "Panel", "fMaxHeightPercent", "maxHeightPercent", Kind::Double, &s.maxHeightPercent, 20.0, 100.0 },
+				{ "Panel", "bScrollWithMouse", "scrollWithMouse", Kind::Bool, &s.scrollWithMouse },
+				{ "Panel", "bScrollKeys", "scrollKeys", Kind::Bool, &s.scrollKeys },
+				{ "Panel", "iScrollUpKey", nullptr, Kind::UInt, &s.scrollUpKey, 1, 254 },
+				{ "Panel", "iScrollDownKey", nullptr, Kind::UInt, &s.scrollDownKey, 1, 254 },
 				{ "Panel", "fWidthPercent", "widthPercent", Kind::Double, &s.widthPercent, 10, 100 },
 				{ "Panel", "fScale", "panelScale", Kind::Double, &s.panelScale, 0.25, 4 },
 				{ "Panel", "iFontSize", "fontSize", Kind::UInt, &s.fontSize, 0, 96 },

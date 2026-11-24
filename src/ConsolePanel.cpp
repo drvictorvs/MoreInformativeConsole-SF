@@ -4,6 +4,9 @@
 #include "FormInfo.h"
 #include "Settings.h"
 
+// user32 (linked in xmake.lua). Declared here because the shared Windows wrappers don't have it.
+extern "C" __declspec(dllimport) short __stdcall GetAsyncKeyState(int a_key);
+
 namespace MIC::ConsolePanel
 {
 	namespace
@@ -34,6 +37,14 @@ namespace MIC::ConsolePanel
 			double        layoutViewL{ 0.0 };
 			double        layoutViewT{ 0.0 };
 			double        layoutViewR{ 0.0 };
+
+			// Scrolling: the panel is capped at the screen height and longer text scrolls.
+			RE::TESFormID shownID{ 0 };        // reference whose info is in the panel
+			bool          scrollable{ false };
+			double        panelWidth{ 0.0 };   // background size, in the panel's own units
+			double        panelHeight{ 0.0 };
+			double        drawnScrollV{ 1.0 };  // scroll position the scroll bar was drawn for
+			std::uint32_t keyFrames{ 0 };       // frames a scroll key has been held
 			std::uint32_t layoutVersion{ 0 };
 		};
 
@@ -143,6 +154,11 @@ namespace MIC::ConsolePanel
 		void ApplyStyle(Value& a_console, Value& a_panel, Value& a_text)
 		{
 			const auto& settings = Settings::Get();
+			// With wheel scrolling on, the text field takes the mouse (and so blocks clicks under it).
+			Set(a_panel, "mouseEnabled", Value(false));
+			Set(a_panel, "mouseChildren", Value(settings.scrollWithMouse));
+			Set(a_text, "mouseEnabled", Value(settings.scrollWithMouse));
+			Set(a_text, "mouseWheelEnabled", Value(settings.scrollWithMouse));
 			Value       history;
 			if (Member(a_console, "CommandHistory", history)) {
 				Value format;
@@ -173,6 +189,42 @@ namespace MIC::ConsolePanel
 			if (a_console.Invoke("getChildByName", &panel, &nameArg, 1) && panel.IsDisplayObject()) {
 				Set(panel, "visible", Value(false));
 			}
+		}
+
+		// The background, and a thin scroll bar on its right edge when the text scrolls.
+		void DrawBackground(Value& a_panel, Value& a_text)
+		{
+			const auto& settings = Settings::Get();
+			auto&       state = GetState();
+			Value       graphics;
+			if (!Member(a_panel, "graphics", graphics)) {
+				return;
+			}
+			graphics.Invoke("clear");
+			Value fill[2]{ Value(settings.backgroundColor & 0xFFFFFF), Value(settings.backgroundAlpha) };
+			graphics.Invoke("beginFill", nullptr, fill, 2);
+			Value rect[4]{ Value(0.0), Value(0.0), Value(state.panelWidth), Value(state.panelHeight) };
+			graphics.Invoke("drawRect", nullptr, rect, 4);
+			graphics.Invoke("endFill");
+
+			Value        v;
+			const double scrollV = Member(a_text, "scrollV", v) ? Num(v, 1.0) : 1.0;
+			state.drawnScrollV = scrollV;
+			if (!state.scrollable) {
+				return;
+			}
+			const double maxScrollV = Member(a_text, "maxScrollV", v) ? Num(v, 1.0) : 1.0;
+			const double bottomV = Member(a_text, "bottomScrollV", v) ? Num(v, scrollV) : scrollV;
+			const double visible = std::max(1.0, bottomV - scrollV + 1.0);
+			const double total = std::max(visible, maxScrollV + visible - 1.0);
+			const double track = state.panelHeight - 2 * kPadding;
+			const double thumb = std::min(track, std::max(12.0, track * visible / total));
+			const double at = maxScrollV > 1.0 ? (scrollV - 1.0) / (maxScrollV - 1.0) : 0.0;
+			Value barFill[2]{ Value(settings.labelColor & 0xFFFFFF), Value(0.7) };
+			graphics.Invoke("beginFill", nullptr, barFill, 2);
+			Value bar[4]{ Value(state.panelWidth - 5.0), Value(kPadding + (track - thumb) * at), Value(3.0), Value(thumb) };
+			graphics.Invoke("drawRect", nullptr, bar, 4);
+			graphics.Invoke("endFill");
 		}
 
 		void Layout(Value& a_console, Value& a_panel, Value& a_text, bool a_textChanged)
@@ -239,25 +291,36 @@ namespace MIC::ConsolePanel
 			const double screenWidth = std::clamp(usable * settings.widthPercent / 100.0, std::min(120.0, usable), usable);
 			const double width = screenWidth / scale;
 			Set(a_text, "width", Value(width - 2 * kPadding));
+			Set(a_text, "autoSize", Value("left"));  // measure the whole text first
 
-			Value heightVal;
-			const double textHeight = Member(a_text, "height", heightVal) ? Num(heightVal, 0.0) : 0.0;
-			const double height = textHeight + 2 * kPadding;
-			const double screenHeight = height * scale;
+			Value        heightVal;
+			const double fullText = Member(a_text, "height", heightVal) ? Num(heightVal, 0.0) : 0.0;
 
-			Value graphics;
-			if (Member(a_panel, "graphics", graphics)) {
-				graphics.Invoke("clear");
-				Value fill[2]{ Value(settings.backgroundColor & 0xFFFFFF), Value(settings.backgroundAlpha) };
-				graphics.Invoke("beginFill", nullptr, fill, 2);
-				Value rect[4]{ Value(0.0), Value(0.0), Value(width), Value(height) };
-				graphics.Invoke("drawRect", nullptr, rect, 4);
-				graphics.Invoke("endFill");
-			}
-
-			const double x = (settings.alignRight ? right - screenWidth : left) + settings.offsetX;
 			// Over the console its bottom lines up with the console's (kept on screen); otherwise it sits above.
 			const double bottom = settings.overConsole ? std::min(by + bh, viewB) : by;
+
+			// Room for the panel: from the top of the screen down to its bottom, and at most the chosen
+			// share of the screen height. Longer text gets a fixed-height field, which scrolls.
+			double room = bottom - margin - (viewT + margin);
+			if (viewT > -1.0e8 && viewB < 1.0e8) {
+				room = std::min(room, (viewB - viewT) * settings.maxHeightPercent / 100.0 - 2 * margin);
+			}
+			const double maxText = room / scale - 2 * kPadding;
+			double       textHeight = fullText;
+			state.scrollable = false;
+			if (maxText > 40.0 && fullText > maxText) {
+				Set(a_text, "autoSize", Value("none"));
+				Set(a_text, "height", Value(maxText));
+				textHeight = maxText;
+				state.scrollable = true;
+			}
+			const double height = textHeight + 2 * kPadding;
+			const double screenHeight = height * scale;
+			state.panelWidth = width;
+			state.panelHeight = height;
+			DrawBackground(a_panel, a_text);
+
+			const double x = (settings.alignRight ? right - screenWidth : left) + settings.offsetX;
 			double       y = bottom - margin - screenHeight + settings.offsetY;
 			y = std::max(y, viewT + margin);  // never above the top of the screen
 			Set(a_panel, "x", Value(x));
@@ -359,12 +422,24 @@ namespace MIC::ConsolePanel
 			const auto t1 = Clock::now();
 			const auto html = RenderHTML(sections);
 			const bool changed = html != state.lastHTML;
+			const bool sameRef = id == state.shownID;
+			Value      v;
+			const double keepScroll = sameRef && Member(text, "scrollV", v) ? Num(v, 1.0) : 1.0;
+			state.shownID = id;
 			if (changed) {
 				Set(text, "htmlText", Value(html.c_str()));
 				state.lastHTML = html;
 			}
 			const auto t2 = Clock::now();
 			Layout(console, panel, text, changed);
+			if (changed || !sameRef) {
+				// New text resets the scroll position: keep it for the same reference, start at the top otherwise.
+				const double maxScrollV = Member(text, "maxScrollV", v) ? Num(v, 1.0) : 1.0;
+				Set(text, "scrollV", Value(std::clamp(keepScroll, 1.0, std::max(1.0, maxScrollV))));
+			}
+			if (state.scrollable && Member(text, "scrollV", v) && Num(v, 1.0) != state.drawnScrollV) {
+				DrawBackground(panel, text);  // moved by the mouse wheel, or restored above
+			}
 			Set(panel, "visible", Value(true));
 			const auto t3 = Clock::now();
 
@@ -411,6 +486,42 @@ namespace MIC::ConsolePanel
 		return 0;
 	}
 
+	namespace
+	{
+		// Scrolls the panel by a page (a_direction -1 or 1).
+		void ScrollPanel(int a_direction)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			if (!ui) {
+				return;
+			}
+			static const RE::BSFixedString consoleName{ "Console" };
+			auto menu = ui->GetMenu(consoleName);
+			if (!menu || !menu->uiMovie) {
+				return;
+			}
+			Value console;
+			if (!GetConsoleClip(*menu->uiMovie, *menu, console)) {
+				return;
+			}
+			Value panel;
+			Value text;
+			Value panelName(kPanelName);
+			Value textName(kTextName);
+			if (!console.Invoke("getChildByName", &panel, &panelName, 1) || !panel.IsDisplayObject() ||
+				!panel.Invoke("getChildByName", &text, &textName, 1) || !text.IsDisplayObject()) {
+				return;
+			}
+			Value        v;
+			const double scrollV = Member(text, "scrollV", v) ? Num(v, 1.0) : 1.0;
+			const double bottomV = Member(text, "bottomScrollV", v) ? Num(v, scrollV) : scrollV;
+			const double maxScrollV = Member(text, "maxScrollV", v) ? Num(v, 1.0) : 1.0;
+			const double page = std::max(1.0, bottomV - scrollV);
+			Set(text, "scrollV", Value(std::clamp(scrollV + a_direction * page, 1.0, std::max(1.0, maxScrollV))));
+			DrawBackground(panel, text);
+		}
+	}
+
 	void OnFrame()
 	{
 		if (!Address::Get().core) {
@@ -433,7 +544,21 @@ namespace MIC::ConsolePanel
 			state.lastPrintedID = 0;  // print again for the same reference after reopening
 			return;
 		}
-		if (state.frame % Settings::Get().refreshFrames != 0) {
+		// Scroll keys, checked every frame so scrolling feels immediate: one page on press, then
+		// another every 8 frames while held.
+		const auto& settings = Settings::Get();
+		if (settings.scrollKeys && state.scrollable) {
+			const bool down = (GetAsyncKeyState(static_cast<int>(settings.scrollDownKey)) & 0x8000) != 0;
+			const bool up = (GetAsyncKeyState(static_cast<int>(settings.scrollUpKey)) & 0x8000) != 0;
+			const int  direction = down ? 1 : (up ? -1 : 0);
+			if (direction == 0) {
+				state.keyFrames = 0;
+			} else if (state.keyFrames++ % 8 == 0) {
+				ScrollPanel(direction);
+			}
+		}
+
+		if (state.frame % settings.refreshFrames != 0) {
 			return;
 		}
 		Update();

@@ -16,6 +16,11 @@ namespace MIC
 		// Panel
 		bool          alignRight{ true };
 		bool          overConsole{ false };  // bottom-align with the console instead of sitting above it
+		double        maxHeightPercent{ 100.0 };  // of the screen height; taller text scrolls
+		bool          scrollWithMouse{ true };    // the mouse wheel scrolls the panel (it then takes mouse input)
+		bool          scrollKeys{ true };         // keys below scroll the panel by a page
+		std::uint32_t scrollUpKey{ 0x21 };        // Windows virtual-key code: PageUp
+		std::uint32_t scrollDownKey{ 0x22 };      // PageDown
 		double        widthPercent{ 40.0 };
 		double        panelScale{ 1.0 };
 		std::uint32_t fontSize{ 0 };  // 0 = console's own size
