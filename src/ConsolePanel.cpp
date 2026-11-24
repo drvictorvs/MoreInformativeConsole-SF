@@ -23,6 +23,14 @@ namespace MIC::ConsolePanel
 			std::uint32_t appliedStyle{ 0 };  // Settings::version the panel was styled with
 			bool          loggedNoParse{ false };
 			bool          loggedNoBounds{ false };
+
+			// Last layout: redone only when the text, the console's position or the settings change,
+			// because setting the text field's width makes Scaleform re-lay out all of its text.
+			bool          layoutValid{ false };
+			double        layoutX{ 0.0 };
+			double        layoutY{ 0.0 };
+			double        layoutW{ 0.0 };
+			std::uint32_t layoutVersion{ 0 };
 		};
 
 		State& GetState()
@@ -163,7 +171,7 @@ namespace MIC::ConsolePanel
 			}
 		}
 
-		void Layout(Value& a_console, Value& a_panel, Value& a_text)
+		void Layout(Value& a_console, Value& a_panel, Value& a_text, bool a_textChanged)
 		{
 			const auto& settings = Settings::Get();
 			auto&       state = GetState();
@@ -182,6 +190,16 @@ namespace MIC::ConsolePanel
 				state.loggedNoBounds = true;
 				REX::WARN("Could not read the console background bounds; placing the panel at the console origin");
 			}
+
+			if (!a_textChanged && state.layoutValid && state.layoutVersion == settings.version &&
+				bx == state.layoutX && by == state.layoutY && bw == state.layoutW) {
+				return;  // nothing that affects the layout changed
+			}
+			state.layoutValid = true;
+			state.layoutVersion = settings.version;
+			state.layoutX = bx;
+			state.layoutY = by;
+			state.layoutW = bw;
 
 			// width/height are in the panel's own units; on screen they are multiplied by the scale.
 			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
@@ -298,13 +316,31 @@ namespace MIC::ConsolePanel
 				return;
 			}
 
-			const auto html = RenderHTML(CollectReferenceInfo(ref));
-			if (html != state.lastHTML) {
+			using Clock = std::chrono::steady_clock;
+			const auto t0 = Clock::now();
+			const auto sections = CollectReferenceInfo(ref);
+			const auto t1 = Clock::now();
+			const auto html = RenderHTML(sections);
+			const bool changed = html != state.lastHTML;
+			if (changed) {
 				Set(text, "htmlText", Value(html.c_str()));
 				state.lastHTML = html;
 			}
-			Layout(console, panel, text);
+			const auto t2 = Clock::now();
+			Layout(console, panel, text, changed);
 			Set(panel, "visible", Value(true));
+			const auto t3 = Clock::now();
+
+			if (settings.debugLog) {
+				using us = std::chrono::microseconds;
+				const auto total = std::chrono::duration_cast<us>(t3 - t0).count();
+				if (changed || total > 2000) {
+					REX::INFO("Timing: collect {} us, text {} us{}, layout {} us",
+						std::chrono::duration_cast<us>(t1 - t0).count(),
+						std::chrono::duration_cast<us>(t2 - t1).count(), changed ? " (changed)" : "",
+						std::chrono::duration_cast<us>(t3 - t2).count());
+				}
+			}
 		}
 	}
 
