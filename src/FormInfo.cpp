@@ -655,32 +655,6 @@ namespace MIC
 			}
 			a_out.push_back(std::move(sec));
 		}
-	}
-
-	std::string DefiningFileName(RE::TESFormID a_formID)
-	{
-		const auto top = a_formID >> 24;
-		if (top == 0xFF) {
-			return "(created in save)";
-		}
-		if (!Address::Get().dataHandler) {
-			return {};
-		}
-		auto* handler = RE::TESDataHandler::GetSingleton();
-		if (!handler) {
-			return {};
-		}
-		const auto& files = handler->compiledFileCollection;
-
-		if (top == 0xFE) {  // small master: FE xxx yyy
-			const auto index = (a_formID >> 12) & 0xFFF;
-			return index < files.smallFiles.size() ? FileName(files.smallFiles[index]) : std::string();
-		}
-		if (top == 0xFD) {  // medium master: FD xx yyyy
-			const auto index = (a_formID >> 16) & 0xFF;
-			return index < files.mediumFiles.size() ? FileName(files.mediumFiles[index]) : std::string();
-		}
-		return top < files.files.size() ? FileName(files.files[top]) : std::string();
 		// ---- biped slots, armor addons, material swaps --------------------------------------------
 		// Offsets come from GameID::Layout (confirmed on 1.16.244; several differ from the fork), so
 		// every read goes through SafeMemory and every pointer is checked against the form table.
@@ -968,6 +942,32 @@ namespace MIC
 			}
 			a_out.push_back(std::move(sec));
 		}
+	}
+
+	std::string DefiningFileName(RE::TESFormID a_formID)
+	{
+		const auto top = a_formID >> 24;
+		if (top == 0xFF) {
+			return "(created in save)";
+		}
+		if (!Address::Get().dataHandler) {
+			return {};
+		}
+		auto* handler = RE::TESDataHandler::GetSingleton();
+		if (!handler) {
+			return {};
+		}
+		const auto& files = handler->compiledFileCollection;
+
+		if (top == 0xFE) {  // small master: FE xxx yyy
+			const auto index = (a_formID >> 12) & 0xFFF;
+			return index < files.smallFiles.size() ? FileName(files.smallFiles[index]) : std::string();
+		}
+		if (top == 0xFD) {  // medium master: FD xx yyyy
+			const auto index = (a_formID >> 16) & 0xFF;
+			return index < files.mediumFiles.size() ? FileName(files.mediumFiles[index]) : std::string();
+		}
+		return top < files.files.size() ? FileName(files.files[top]) : std::string();
 	}
 
 	std::vector<InfoSection> CollectReferenceInfo(RE::TESObjectREFR* a_ref)
