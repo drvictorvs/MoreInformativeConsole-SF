@@ -6,13 +6,13 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 |---|---|
 | Reference | Name, ref ID and type, editor ID, defining plugin, last plugin to change it, flags (persistent, disabled, deleted, created in game) |
 | Base object | Name, base ID and type, editor ID, plugins, model path, keywords |
-| NPC | Race and its plugin; essential, protected, unique, invulnerable, ghost, respawns, sex; level (or player-scaled range); leveled template; factions with ranks, and the live rank when it differs; dead, combat search, in water |
+| NPC | Race and its plugin; essential, protected, unique, invulnerable, ghost, respawns, sex; level (or player-scaled range); leveled template; factions (name, editor ID where the game keeps one, form ID) with ranks and the live rank when it differs, on one line or as a list; dead, combat search, in water |
 | AI & animation | Running AI package (and the normal one under a run-once override), package type and step, queued idle with its animation event, graph and file, furniture in use, the line being spoken, follower command, light level |
 | Lock | Locked or not; the game's own category name and level (e.g. "Requires Key (255)", "Hard (60, leveled: base 40 + area level 20 x 1)"); locks shared from the linked door; key |
 | Inventory | Kinds and total count, first N items with counts, equipped marked `[E]` |
 | Worn (actors) | Biped slots in use and any overlap; each worn item with its slot bits; the armor addon picked for the actor's race and its model path for the actor's sex |
 | Position | Coordinates, rotation, scale, cell and its plugin, location, parent locations |
-| Experimental (off by default) | Combat, invulnerable, talking, scene; health, oxygen, carry weight, speed and AI values; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
+| Experimental (off by default) | Combat, invulnerable, talking, scene; actor values, each optional (health, oxygen, carry weight, speed, AI values, the hide-spacesuit and hide-helmet toggles, and any others you name by editor ID), shown as current value and base, on one line or as a list; active magic effects with their source, caster, magnitude and time left; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
 
 Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. Menu changes apply right away, the next time the console panel refreshes.
 

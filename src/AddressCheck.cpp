@@ -169,6 +169,9 @@ namespace MIC::Address
 				{ RE::ID::BSReadWriteLock::LockRead, "BSReadWriteLock::LockRead" },
 				{ RE::ID::BSReadWriteLock::UnlockRead, "BSReadWriteLock::UnlockRead" },
 			});
+			f.lookupByEditorID = CheckGroup("Actor values by editor ID", {
+				{ RE::ID::TESForm::LookupByEditorID, "TESForm::LookupByEditorID" },
+			});
 			f.materialSwaps = CheckGroup("Material swaps", {
 				{ GameID::GetModelMaterialSwaps, "GetModelMaterialSwaps (found for this mod)" },
 			});
@@ -176,8 +179,8 @@ namespace MIC::Address
 			if (!f.core) {
 				REX::ERROR("Core functions are missing for this game version; the plugin stays inactive");
 			}
-			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={} materialSwaps={} editorIDs={}",
-				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails, f.materialSwaps, f.editorIDs);
+			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={} materialSwaps={} editorIDs={} lookupByEditorID={}",
+				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails, f.materialSwaps, f.editorIDs, f.lookupByEditorID);
 			return f;
 		}
 	}

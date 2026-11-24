@@ -56,7 +56,8 @@ namespace MIC
 		bool KeepsEditorIDInMap(RE::FormType a_type)
 		{
 			using T = RE::FormType;
-			return a_type == T::kFACT || a_type == T::kPACK || a_type == T::kLMSW || a_type == T::kQUST;
+			return a_type == T::kFACT || a_type == T::kPACK || a_type == T::kLMSW || a_type == T::kQUST ||
+			       a_type == T::kMGEF || a_type == T::kSPEL;
 		}
 
 		const std::unordered_map<RE::TESFormID, std::string>& EditorIDMap()
@@ -326,25 +327,42 @@ namespace MIC
 					sec.lines.push_back({ "Template", "uses a leveled template (values above may come from it)" });
 				}
 
-				if (settings.showFactions) {
-					std::vector<std::string> factions;
+				if (settings.showFactions && settings.maxFactions > 0) {
+					// Each: "Name [EDID] (form ID)", skipping whichever of name and editor ID is missing,
+					// with its rank, and the live rank when it differs.
+					std::vector<std::pair<std::string, std::string>> factions;
+					std::size_t                                      total = 0;
 					for (const auto& entry : SafeArray(data.factions, 512)) {
 						auto* faction = Safe::FormAs<RE::TESFaction>(entry.faction);
 						if (!faction) {
 							continue;
 						}
-						// "Name [EDID] (form ID) rank", skipping whichever of name and editor ID is missing.
-						std::string text = std::format("{} {}", Describe(faction), entry.rank);
+						if (++total > settings.maxFactions) {
+							continue;
+						}
+						std::string rank = std::format("rank {}", entry.rank);
 						if (Address::Get().factionRank) {
 							const auto live = a_actor->GetFactionRank(faction, a_actor->GetFormID() == 0x14);
 							if (live != entry.rank) {
-								text += std::format(" (now {})", live);
+								rank += std::format(" (now {})", live);
 							}
 						}
-						factions.push_back(std::move(text));
+						factions.emplace_back(Describe(faction), std::move(rank));
 					}
 					if (!factions.empty()) {
-						sec.lines.push_back({ "Factions", Join(factions) });
+						const bool more = total > factions.size();
+						if (settings.factionsAsList) {
+							sec.lines.push_back({ "Factions", more ? std::format("{}, first {} shown", total, factions.size()) : std::to_string(total) });
+							for (const auto& [name, rank] : factions) {
+								sec.lines.push_back({ "  " + name, rank });
+							}
+						} else {
+							std::vector<std::string> parts;
+							for (const auto& [name, rank] : factions) {
+								parts.push_back(name + " " + rank);
+							}
+							sec.lines.push_back({ "Factions", Join(parts) + (more ? ", ..." : "") });
+						}
 					}
 				}
 			}
@@ -518,6 +536,110 @@ namespace MIC
 			}
 		}
 
+		// "12", or "1.25" when the value isn't whole.
+		std::string Number(float a_value)
+		{
+			const auto rounded = std::round(a_value);
+			return std::abs(a_value - rounded) < 0.005f ? std::format("{:.0f}", rounded) : std::format("{:.2f}", a_value);
+		}
+
+		// An actor value by editor ID, or through a default object (DFOB) that points to one.
+		// Results, including "not found", are cached: forms don't move once the game has loaded.
+		RE::ActorValueInfo* ActorValueByEditorID(const std::string& a_editorID)
+		{
+			static std::unordered_map<std::string, RE::ActorValueInfo*> cache;
+			if (const auto it = cache.find(a_editorID); it != cache.end()) {
+				return it->second;
+			}
+			RE::ActorValueInfo* result = nullptr;
+			if (Address::Get().lookupByEditorID && !a_editorID.empty()) {
+				const RE::BSFixedString name{ a_editorID.c_str() };
+				if (auto* form = Safe::Form(RE::TESForm::LookupByEditorID(name))) {
+					if (form->GetFormType() == RE::FormType::kAVIF) {
+						result = Safe::FormAs<RE::ActorValueInfo>(form);
+					} else if (form->GetFormType() == RE::FormType::kDFOB) {
+						const void* object = nullptr;
+						Safe::Read(&static_cast<const RE::BGSDefaultObject*>(form)->object, object);
+						result = Safe::FormAs<RE::ActorValueInfo>(object);
+					}
+				}
+			}
+			cache.emplace(a_editorID, result);
+			return result;
+		}
+
+		// Current value, then the base in parentheses when it differs.
+		void AddActorValues(InfoSection& a_sec, RE::Actor* a_actor)
+		{
+			const auto& settings = Settings::Get();
+			auto*       avs = RE::ActorValue::GetSingleton();
+			if (!avs || !Safe::Readable(avs, sizeof(RE::ActorValue))) {
+				return;
+			}
+			struct Wanted
+			{
+				std::string         label;
+				RE::ActorValueInfo* info;
+			};
+			std::vector<Wanted> wanted;
+			auto add = [&](bool a_on, std::string a_label, RE::ActorValueInfo* a_info) {
+				if (a_on) {
+					wanted.push_back({ std::move(a_label), a_info });
+				}
+			};
+			add(settings.avHealth, "Health", avs->health);
+			add(settings.avOxygen, "Oxygen", avs->oxygen);
+			add(settings.avCarry, "Carry weight", avs->carryWeight);
+			add(settings.avSpeed, "Speed", avs->speedMult);
+			add(settings.avAggression, "Aggression", avs->aggression);
+			add(settings.avConfidence, "Confidence", avs->confidence);
+			add(settings.avAssistance, "Assistance", avs->assistance);
+			add(settings.avMorality, "Morality", avs->morality);
+			// The game's cosmetic toggles, found through the default objects it uses for them.
+			add(settings.avHideSpacesuit, "Hide spacesuit (settlements)", ActorValueByEditorID("ActorShouldHideSpacesuitCosmeticSettlementAV_DO"));
+			add(settings.avHideHelmet, "Hide helmet (breathable)", ActorValueByEditorID("ActorShouldHideSpacesuitHelmetCosmeticBreathableAV_DO"));
+			// More, by editor ID.
+			for (std::size_t start = 0; start < settings.extraActorValues.size();) {
+				auto end = settings.extraActorValues.find(',', start);
+				if (end == std::string::npos) end = settings.extraActorValues.size();
+				auto name = settings.extraActorValues.substr(start, end - start);
+				name.erase(0, name.find_first_not_of(" \t"));
+				name.erase(name.find_last_not_of(" \t") + 1);
+				if (!name.empty()) {
+					wanted.push_back({ name, ActorValueByEditorID(name) });
+				}
+				start = end + 1;
+			}
+
+			auto&                                            owner = static_cast<RE::ActorValueOwner&>(*a_actor);
+			std::vector<std::pair<std::string, std::string>> values;
+			for (const auto& [label, info] : wanted) {
+				auto* form = Safe::FormAs<RE::ActorValueInfo>(info);
+				if (!form) {
+					values.emplace_back(label, "n/a");
+					continue;
+				}
+				const auto current = owner.GetActorValue(*form);
+				const auto base = owner.GetBaseActorValue(*form);
+				values.emplace_back(label, std::abs(current - base) < 0.005f ? Number(current) : std::format("{} (base {})", Number(current), Number(base)));
+			}
+			if (values.empty()) {
+				return;
+			}
+			if (settings.actorValuesAsList) {
+				a_sec.lines.push_back({ "Actor values", "current (base, when different)" });
+				for (const auto& [label, value] : values) {
+					a_sec.lines.push_back({ "  " + label, value });
+				}
+			} else {
+				std::vector<std::string> parts;
+				for (const auto& [label, value] : values) {
+					parts.push_back(label + " " + value);
+				}
+				a_sec.lines.push_back({ "Values", Join(parts) });
+			}
+		}
+
 		void AddExperimentalActor(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
 		{
 			const auto& settings = Settings::Get();
@@ -535,26 +657,7 @@ namespace MIC
 			}
 
 			if (settings.showActorValues && Address::Get().actorValues) {
-				auto* avs = RE::ActorValue::GetSingleton();
-				if (avs && Safe::Readable(avs, sizeof(RE::ActorValue))) {
-					auto&                    owner = static_cast<RE::ActorValueOwner&>(*a_actor);
-					std::vector<std::string> values;
-					const std::pair<const char*, RE::ActorValueInfo*> list[] = {
-						{ "Health", avs->health }, { "Oxygen", avs->oxygen }, { "Carry", avs->carryWeight },
-						{ "Speed", avs->speedMult }, { "Aggression", avs->aggression }, { "Confidence", avs->confidence },
-						{ "Assistance", avs->assistance }, { "Morality", avs->morality },
-					};
-					for (const auto& [label, info] : list) {
-						if (auto* form = Safe::FormAs<RE::ActorValueInfo>(info)) {
-							const auto current = owner.GetActorValue(*form);
-							const auto base = owner.GetBaseActorValue(*form);
-							values.push_back(current == base ? std::format("{} {:.0f}", label, current) : std::format("{} {:.0f}/{:.0f}", label, current, base));
-						}
-					}
-					if (!values.empty()) {
-						sec.lines.push_back({ "Values", Join(values) });
-					}
-				}
+				AddActorValues(sec, a_actor);
 			}
 
 			if (!sec.lines.empty()) {
@@ -1046,6 +1149,107 @@ namespace MIC
 			}
 			a_out.push_back(std::move(sec));
 		}
+
+		// Active magic effects. The list is the one the HasMagicEffect condition walks (ID 65160 ->
+		// 1016564): Actor's MagicTarget is at +0xD8 (RTTI); its active effect list (vtable slot 8,
+		// ID 101877) is at process(+0x150)->middleHigh(+8) + 0x238: a BSReadWriteLock, then an array
+		// of ActiveEffect pointers at +8. ActiveEffect: caster handle +0x44, source +0x58, EffectItem*
+		// +0x60 (its +0x10 is the EffectSetting), elapsed +0x80, duration +0x84, magnitude +0x88 (valid
+		// when flag 0x200 is set), flags +0x8C. Fields are copied under the list's lock; names are
+		// looked up after it is released.
+		void AddMagicEffectsSection(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
+		{
+			const auto& settings = Settings::Get();
+			if (!Address::Get().inventory || settings.maxMagicEffects == 0) {
+				return;  // the inventory group checks the read-lock functions used here
+			}
+			const auto*      actor = reinterpret_cast<const std::byte*>(a_actor);
+			const std::byte* process = nullptr;
+			const std::byte* middleHigh = nullptr;
+			if (!Safe::Read(actor + 0xD8 + 0x150, process) || !process || !Safe::Read(process + 8, middleHigh) || !middleHigh) {
+				return;
+			}
+			const std::byte* list = middleHigh + 0x238;
+			if (!Safe::Readable(list, 0x18)) {
+				return;
+			}
+
+			struct Effect
+			{
+				const void*   setting{ nullptr };
+				const void*   source{ nullptr };
+				std::uint32_t caster{ 0 };
+				float         elapsed{ 0.0f };
+				float         duration{ 0.0f };
+				float         magnitude{ 0.0f };
+				std::uint32_t flags{ 0 };
+			};
+			std::array<Effect, 100> copied{};
+			std::size_t             count = 0;
+			std::size_t             total = 0;
+			const std::size_t       limit = std::min<std::size_t>(settings.maxMagicEffects, copied.size());
+
+			auto* lock = reinterpret_cast<RE::BSReadWriteLock*>(const_cast<std::byte*>(list));
+			lock->LockRead();
+			RawArray effects{};
+			if (ReadRawArray(list + 8, sizeof(void*), 4096, effects)) {
+				total = effects.size;
+				for (std::uint32_t i = 0; i < effects.size && count < limit; ++i) {
+					const std::byte* active = nullptr;
+					std::memcpy(&active, effects.data + i * sizeof(void*), sizeof(void*));
+					if (!active || !Safe::Readable(active, 0x90)) {
+						continue;
+					}
+					Effect e;
+					const std::byte* item = nullptr;
+					std::memcpy(&item, active + 0x60, sizeof(item));
+					if (item && Safe::Readable(item, 0x18)) {
+						std::memcpy(&e.setting, item + 0x10, sizeof(e.setting));
+					}
+					std::memcpy(&e.source, active + 0x58, sizeof(e.source));
+					std::memcpy(&e.caster, active + 0x44, sizeof(e.caster));
+					std::memcpy(&e.elapsed, active + 0x80, sizeof(e.elapsed));
+					std::memcpy(&e.duration, active + 0x84, sizeof(e.duration));
+					std::memcpy(&e.magnitude, active + 0x88, sizeof(e.magnitude));
+					std::memcpy(&e.flags, active + 0x8C, sizeof(e.flags));
+					copied[count++] = e;
+				}
+			}
+			lock->UnlockRead();
+			if (total == 0) {
+				return;
+			}
+
+			InfoSection sec{ "Magic effects (experimental)", {} };
+			sec.lines.push_back({ "Active", total > count ? std::format("{}, first {} shown", total, count) : std::to_string(total) });
+			for (std::size_t i = 0; i < count; ++i) {
+				const auto& e = copied[i];
+				auto*       setting = Safe::Form(e.setting);
+				std::vector<std::string> parts;
+				if (auto* source = Safe::Form(e.source)) {
+					parts.push_back(std::format("from {} ({})", Describe(source), TypeName(source)));
+				}
+				if (e.caster != 0 && Address::Get().furniture) {
+					static_assert(sizeof(RE::BSPointerHandle<RE::TESObjectREFR>) == sizeof(std::uint32_t));
+					RE::BSPointerHandle<RE::TESObjectREFR> handle;
+					std::memcpy(&handle, &e.caster, sizeof(e.caster));
+					const auto caster = handle.get();
+					if (auto* ref = Safe::Form(caster.get())) {
+						parts.push_back(ref == a_actor ? std::string("cast by self") : std::format("cast by {}", Describe(ref)));
+					}
+				}
+				if (e.flags & 0x200) {
+					parts.push_back(std::format("magnitude {}", Number(e.magnitude)));
+				}
+				if (e.duration > 0.0f) {
+					parts.push_back(std::format("{}s left of {}s", Number(std::max(0.0f, e.duration - e.elapsed)), Number(e.duration)));
+				} else {
+					parts.push_back("no time limit");
+				}
+				sec.lines.push_back({ "  " + (setting ? Describe(setting) : std::string("(unknown effect)")), Join(parts) });
+			}
+			a_out.push_back(std::move(sec));
+		}
 	}
 
 	std::string DefiningFileName(RE::TESFormID a_formID)
@@ -1165,6 +1369,10 @@ namespace MIC
 					ScopedTimer timer{ "[Actor experimental]" };
 					AddExperimentalActor(sections, actor);
 				}
+			}
+			if (settings.showMagicEffects) {
+				ScopedTimer timer{ "[Magic effects]" };
+				AddMagicEffectsSection(sections, actor);
 			}
 		} else if (settings.showLock) {
 			{

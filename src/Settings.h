@@ -35,6 +35,8 @@ namespace MIC
 		std::uint32_t maxKeywords{ 12 };
 		bool          showNPC{ true };
 		bool          showFactions{ true };
+		bool          factionsAsList{ false };  // one faction per line instead of one comma-separated line
+		std::uint32_t maxFactions{ 12 };
 		bool          showLock{ true };
 		bool          showPosition{ true };
 		bool          showLocationChain{ true };
@@ -50,6 +52,20 @@ namespace MIC
 		bool        showMaterialSwaps{ false };
 		std::uint32_t maxSwapEntries{ 6 };
 		bool        showActorValues{ false };
+		bool        actorValuesAsList{ false };  // one value per line
+		bool        avHealth{ true };
+		bool        avOxygen{ true };
+		bool        avCarry{ true };
+		bool        avSpeed{ true };
+		bool        avAggression{ true };
+		bool        avConfidence{ true };
+		bool        avAssistance{ true };
+		bool        avMorality{ true };
+		bool        avHideSpacesuit{ true };
+		bool        avHideHelmet{ true };
+		std::string extraActorValues{};  // more actor values by editor ID, comma-separated
+		bool        showMagicEffects{ false };
+		std::uint32_t maxMagicEffects{ 12 };
 		bool        showBounds{ false };
 		bool        showGravity{ false };
 		bool        showGraphVariables{ false };
