@@ -51,10 +51,73 @@ namespace MIC
 			return std::string(begin, end);
 		}
 
+		// Editor IDs of the form types that don't keep theirs on the form, read once from the engine's
+		// editor ID map (see GameID::EditorIDMap). Built the first time it's needed, after data load.
+		bool KeepsEditorIDInMap(RE::FormType a_type)
+		{
+			using T = RE::FormType;
+			return a_type == T::kFACT || a_type == T::kPACK || a_type == T::kLMSW || a_type == T::kQUST;
+		}
+
+		const std::unordered_map<RE::TESFormID, std::string>& EditorIDMap()
+		{
+			static std::unordered_map<RE::TESFormID, std::string> ids;
+			static bool                                            built = false;
+			if (built || !Address::Get().editorIDs) {
+				return ids;
+			}
+			built = true;
+
+			const std::byte* map = nullptr;
+			const auto*      global = reinterpret_cast<const void*>(REL::Relocation<std::uintptr_t>{ GameID::EditorIDMap }.address());
+			if (!Safe::Read(global, map) || !map || !Safe::Readable(map, 0x38)) {
+				return ids;
+			}
+			std::uint64_t    capacity = 0;
+			const std::byte* entries = nullptr;
+			Safe::Read(map + 0x18, capacity);
+			Safe::Read(map + 0x10, entries);
+			constexpr std::size_t kEntry = 0x18;
+			if (capacity == 0 || capacity > (1ull << 24) || !entries || !Safe::Readable(entries, capacity * kEntry)) {
+				return ids;
+			}
+
+			auto* lock = reinterpret_cast<RE::BSReadWriteLock*>(const_cast<std::byte*>(map + 0x30));
+			Safe::BeginBatch();  // remembers readable regions while walking the forms
+			lock->LockRead();
+			for (std::uint64_t i = 0; i < capacity; ++i) {
+				const auto* entry = entries + i * kEntry;
+				if (*reinterpret_cast<const std::uint32_t*>(entry + 0x10) == 0xFFFFFFFF) {
+					continue;  // empty slot
+				}
+				const auto* form = *reinterpret_cast<RE::TESForm* const*>(entry + 8);
+				if (!form || !Safe::Readable(form, sizeof(RE::TESForm)) || !KeepsEditorIDInMap(form->GetFormType())) {
+					continue;
+				}
+				if (auto text = Safe::FixedString(entry); !text.empty()) {
+					ids.emplace(form->GetFormID(), std::move(text));
+				}
+			}
+			lock->UnlockRead();
+			Safe::BeginBatch();
+			REX::INFO("Editor IDs: {} found for factions, packages, quests and material swaps", ids.size());
+			return ids;
+		}
+
 		std::string EditorID(const RE::TESForm* a_form)
 		{
 			ScopedTimer timer{ "editor IDs" };
-			return a_form ? Safe::CString(a_form->GetFormEditorID()) : std::string();
+			if (!a_form) {
+				return {};
+			}
+			auto id = Safe::CString(a_form->GetFormEditorID());
+			if (id.empty() && KeepsEditorIDInMap(a_form->GetFormType())) {
+				const auto& map = EditorIDMap();
+				if (const auto it = map.find(a_form->GetFormID()); it != map.end()) {
+					id = it->second;
+				}
+			}
+			return id;
 		}
 
 		std::string Name(RE::TESForm* a_form)
@@ -270,7 +333,9 @@ namespace MIC
 						if (!faction) {
 							continue;
 						}
-						std::string text = std::format("{} {}", EditorID(faction).empty() ? Hex(faction->GetFormID()) : EditorID(faction), entry.rank);
+						const auto  edid = EditorID(faction);
+						std::string text = edid.empty() ? std::format("{} {}", Hex(faction->GetFormID()), entry.rank)
+						                                : std::format("{} ({}) {}", edid, Hex(faction->GetFormID()), entry.rank);
 						if (Address::Get().factionRank) {
 							const auto live = a_actor->GetFactionRank(faction, a_actor->GetFormID() == 0x14);
 							if (live != entry.rank) {

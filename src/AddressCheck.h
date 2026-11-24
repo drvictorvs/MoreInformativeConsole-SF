@@ -27,6 +27,7 @@ namespace MIC::Address
 		bool actorValues{ false };   // ActorValue::GetSingleton: experimental actor values
 		bool lockDetails{ false };   // GameIDs.h lock getter, area level and lock-level settings
 		bool materialSwaps{ false }; // GameIDs.h material swap lookup
+		bool editorIDs{ false };     // GameIDs.h editor ID map: editor IDs for factions and packages
 	};
 
 	// Runs the check the first time; afterwards returns the cached result.

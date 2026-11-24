@@ -88,6 +88,16 @@ The worn flag is the inventory item's `flags & 7`, as in the fork. Slot numbers 
 - `BGSLayeredMaterialSwap` (LMSW, form type 0xC6): entries `BSTArray` at +0x50, 0x1C0 bytes each: key material BSFixedString at +0x00, `KeyMaterialPathForm` at +0x08, `OverrideMaterialPath` BSFixedString at +0x10.
 - Not done yet: the reference's own `ExtraMaterialSwap` (0xB5, XMSP) and the swaps the renderer actually applied to the loaded 3D.
 
+## Editor IDs
+
+Most form types in Starfield don't keep their editor ID on the form (`GetFormEditorID` returns an empty string for factions, packages, quests, material swaps and more). The engine still has them in a global hash map, which `TESForm::LookupByEditorID` (ID 47403) searches:
+
+- **ID 883342**: pointer to the map.
+- Map layout (from 47403 and its find routine, ID 35641): entries at +0x10, capacity at +0x18 (a power of two), `BSReadWriteLock` at +0x30.
+- Entry, 0x18 bytes: `BSFixedString` key at +0x00, `TESForm*` at +0x08, `u32` next index at +0x10 (`0xFFFFFFFF` = empty slot; a chain ends at index == capacity).
+
+The mod walks the map once, under its read lock, and keeps the editor IDs of factions, packages, quests and material swaps by form ID.
+
 ## Contributing to CommonLibSF
 
 `libxse/commonlibsf` (which OSF's fork syncs from) still has both at 0 in `include/RE/IDs.h`:

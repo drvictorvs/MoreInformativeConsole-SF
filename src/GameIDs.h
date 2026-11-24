@@ -48,6 +48,13 @@ namespace MIC::GameID
 	// create=false by TESModel code (ID 47640) and with true by the model loader (ID 47645).
 	inline constexpr REL::ID GetModelMaterialSwaps{ 47660 };
 
+	// Pointer to the engine's editor ID -> form hash map (what TESForm::LookupByEditorID, ID 47403,
+	// searches). Most form types don't keep their editor ID on the form itself in Starfield, but the
+	// map has them. Layout, from 47403 and the find routine 35641:
+	//   +0x10 entries (0x18 bytes each: BSFixedString key, TESForm* value, u32 next; next == -1: empty)
+	//   +0x18 capacity (power of two)   +0x30 BSReadWriteLock
+	inline constexpr REL::ID EditorIDMap{ 883342 };
+
 	// Layouts confirmed on 1.16.244. CommonLibSF's compiled layout agrees (its offset comments are
 	// stale), except that its biped slot mask is 32-bit; the game's is 64-bit. Read only through SafeMemory.
 	namespace Layout
