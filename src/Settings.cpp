@@ -42,6 +42,10 @@ namespace MIC
 				{ "Panel", "bScrollKeys", "scrollKeys", Kind::Bool, &s.scrollKeys },
 				{ "Panel", "iScrollUpKey", nullptr, Kind::UInt, &s.scrollUpKey, 1, 254 },
 				{ "Panel", "iScrollDownKey", nullptr, Kind::UInt, &s.scrollDownKey, 1, 254 },
+				{ "Panel", "iScrollLines", "scrollLines", Kind::UInt, &s.scrollLines, 0, 50 },
+				{ "Panel", "iScrollRepeatFrames", "scrollRepeatFrames", Kind::UInt, &s.scrollRepeatFrames, 1, 120 },
+				{ "Panel", "iToggleKey", "toggleKey", Kind::UInt, &s.toggleKey, 0, 254 },
+				{ "Panel", "fPadding", "padding", Kind::Double, &s.padding, 0.0, 60.0 },
 				{ "Panel", "fWidthPercent", "widthPercent", Kind::Double, &s.widthPercent, 10, 100 },
 				{ "Panel", "fScale", "panelScale", Kind::Double, &s.panelScale, 0.25, 4 },
 				{ "Panel", "iFontSize", "fontSize", Kind::UInt, &s.fontSize, 0, 96 },
@@ -68,33 +72,35 @@ namespace MIC
 				{ "Content", "bShowInventory", "showInventory", Kind::Bool, &s.showInventory },
 				{ "Content", "iMaxInventoryItems", "maxInventoryItems", Kind::UInt, &s.maxInventoryItems, 0, 200 },
 				{ "Content", "bShowAI", "showAI", Kind::Bool, &s.showAI },
+				{ "Content", "bShowAliases", "showAliases", Kind::Bool, &s.showAliases },
+				{ "Content", "iMaxAliases", "maxAliases", Kind::UInt, &s.maxAliases, 1, 100 },
 				{ "Content", "bShowWorn", "showWorn", Kind::Bool, &s.showWorn },
 				{ "Content", "iMaxWornItems", "maxWornItems", Kind::UInt, &s.maxWornItems, 0, 64 },
 				{ "Content", "bShowWornModels", "showWornModels", Kind::Bool, &s.showWornModels },
 
-				{ "Experimental", "bShowActorState", "showActorState", Kind::Bool, &s.showActorState },
-				{ "Experimental", "bShowMaterialSwaps", "showMaterialSwaps", Kind::Bool, &s.showMaterialSwaps },
-				{ "Experimental", "iMaxSwapEntries", "maxSwapEntries", Kind::UInt, &s.maxSwapEntries, 0, 64 },
-				{ "Experimental", "bShowActorValues", "showActorValues", Kind::Bool, &s.showActorValues },
-				{ "Experimental", "bActorValuesAsList", "actorValuesAsList", Kind::Bool, &s.actorValuesAsList },
-				{ "Experimental", "bAVHealth", "avHealth", Kind::Bool, &s.avHealth },
-				{ "Experimental", "bAVOxygen", "avOxygen", Kind::Bool, &s.avOxygen },
-				{ "Experimental", "bAVCarry", "avCarry", Kind::Bool, &s.avCarry },
-				{ "Experimental", "bAVSpeed", "avSpeed", Kind::Bool, &s.avSpeed },
-				{ "Experimental", "bAVAggression", "avAggression", Kind::Bool, &s.avAggression },
-				{ "Experimental", "bAVConfidence", "avConfidence", Kind::Bool, &s.avConfidence },
-				{ "Experimental", "bAVAssistance", "avAssistance", Kind::Bool, &s.avAssistance },
-				{ "Experimental", "bAVMorality", "avMorality", Kind::Bool, &s.avMorality },
-				{ "Experimental", "bAVHideSpacesuit", "avHideSpacesuit", Kind::Bool, &s.avHideSpacesuit },
-				{ "Experimental", "bAVHideHelmet", "avHideHelmet", Kind::Bool, &s.avHideHelmet },
-				{ "Experimental", "sExtraActorValues", "extraActorValues", Kind::String, &s.extraActorValues },
-				{ "Experimental", "bShowMagicEffects", "showMagicEffects", Kind::Bool, &s.showMagicEffects },
-				{ "Experimental", "iMaxMagicEffects", "maxMagicEffects", Kind::UInt, &s.maxMagicEffects, 1, 100 },
-				{ "Experimental", "bShowBounds", "showBounds", Kind::Bool, &s.showBounds },
-				{ "Experimental", "bShowGravity", "showGravity", Kind::Bool, &s.showGravity },
-				{ "Experimental", "bShowGraphVariables", "showGraphVariables", Kind::Bool, &s.showGraphVariables },
-				{ "Experimental", "sGraphVariables", "graphVariables", Kind::String, &s.graphVariables },
-				{ "Experimental", "bShowEngineDetails", "showEngineDetails", Kind::Bool, &s.showEngineDetails },
+				{ "Details", "bShowActorState", "showActorState", Kind::Bool, &s.showActorState },
+				{ "Details", "bShowMaterialSwaps", "showMaterialSwaps", Kind::Bool, &s.showMaterialSwaps },
+				{ "Details", "iMaxSwapEntries", "maxSwapEntries", Kind::UInt, &s.maxSwapEntries, 0, 64 },
+				{ "Details", "bShowActorValues", "showActorValues", Kind::Bool, &s.showActorValues },
+				{ "Details", "bActorValuesAsList", "actorValuesAsList", Kind::Bool, &s.actorValuesAsList },
+				{ "Details", "bAVHealth", "avHealth", Kind::Bool, &s.avHealth },
+				{ "Details", "bAVOxygen", "avOxygen", Kind::Bool, &s.avOxygen },
+				{ "Details", "bAVCarry", "avCarry", Kind::Bool, &s.avCarry },
+				{ "Details", "bAVSpeed", "avSpeed", Kind::Bool, &s.avSpeed },
+				{ "Details", "bAVAggression", "avAggression", Kind::Bool, &s.avAggression },
+				{ "Details", "bAVConfidence", "avConfidence", Kind::Bool, &s.avConfidence },
+				{ "Details", "bAVAssistance", "avAssistance", Kind::Bool, &s.avAssistance },
+				{ "Details", "bAVMorality", "avMorality", Kind::Bool, &s.avMorality },
+				{ "Details", "bAVHideSpacesuit", "avHideSpacesuit", Kind::Bool, &s.avHideSpacesuit },
+				{ "Details", "bAVHideHelmet", "avHideHelmet", Kind::Bool, &s.avHideHelmet },
+				{ "Details", "sExtraActorValues", "extraActorValues", Kind::String, &s.extraActorValues },
+				{ "Details", "bShowMagicEffects", "showMagicEffects", Kind::Bool, &s.showMagicEffects },
+				{ "Details", "iMaxMagicEffects", "maxMagicEffects", Kind::UInt, &s.maxMagicEffects, 1, 100 },
+				{ "Details", "bShowBounds", "showBounds", Kind::Bool, &s.showBounds },
+				{ "Details", "bShowGravity", "showGravity", Kind::Bool, &s.showGravity },
+				{ "Details", "bShowGraphVariables", "showGraphVariables", Kind::Bool, &s.showGraphVariables },
+				{ "Details", "sGraphVariables", "graphVariables", Kind::String, &s.graphVariables },
+				{ "Details", "bShowEngineDetails", "showEngineDetails", Kind::Bool, &s.showEngineDetails },
 			};
 		}
 
@@ -206,7 +212,9 @@ namespace MIC
 				const auto key = Lower(Trim(std::string_view(line).substr(0, eq)));
 				const auto value = Trim(std::string_view(line).substr(eq + 1));
 				for (const auto& opt : options) {
-					if (Lower(opt.iniSection) == section && Lower(opt.iniKey) == key) {
+					// [Experimental] is the old name of [Details]; INI files from 1.2 and earlier still load.
+					const bool sameSection = Lower(opt.iniSection) == section || (section == "experimental" && Lower(opt.iniSection) == "details");
+					if (sameSection && Lower(opt.iniKey) == key) {
 						SetFromText(opt, value);
 						break;
 					}

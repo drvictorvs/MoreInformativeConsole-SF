@@ -24,7 +24,7 @@ namespace MIC::Address
 		bool inventory{ false };     // BSReadWriteLock: inventory and equipped items
 		bool factionRank{ false };   // Actor::GetFactionRank: live faction ranks
 		bool furniture{ false };     // handle lookup + TESForm::DecRefCount: furniture in use
-		bool actorValues{ false };   // ActorValue::GetSingleton: experimental actor values
+		bool actorValues{ false };   // ActorValue::GetSingleton: actor values
 		bool lockDetails{ false };   // GameIDs.h lock getter, area level and lock-level settings
 		bool materialSwaps{ false }; // GameIDs.h material swap lookup
 		bool editorIDs{ false };     // GameIDs.h editor ID map: editor IDs for factions and packages

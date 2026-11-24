@@ -17,10 +17,14 @@ namespace MIC
 		bool          alignRight{ true };
 		bool          overConsole{ false };  // bottom-align with the console instead of sitting above it
 		double        maxHeightPercent{ 100.0 };  // of the screen height; taller text scrolls
-		bool          scrollWithMouse{ true };    // the mouse wheel scrolls the panel (it then takes mouse input)
+		bool          scrollWithMouse{ false };   // the mouse wheel scrolls the panel (it then takes mouse input)
 		bool          scrollKeys{ true };         // keys below scroll the panel by a page
 		std::uint32_t scrollUpKey{ 0x21 };        // Windows virtual-key code: PageUp
 		std::uint32_t scrollDownKey{ 0x22 };      // PageDown
+		std::uint32_t scrollLines{ 3 };           // lines per scroll step; 0 = a page
+		std::uint32_t scrollRepeatFrames{ 10 };   // while a key is held, another step every N frames
+		std::uint32_t toggleKey{ 0x09 };          // shows/hides the panel while the console is open; 0 = off
+		double        padding{ 6.0 };             // space between the panel's edge and its text
 		double        widthPercent{ 40.0 };
 		double        panelScale{ 1.0 };
 		std::uint32_t fontSize{ 0 };  // 0 = console's own size
@@ -48,11 +52,13 @@ namespace MIC
 		bool          showInventory{ true };
 		std::uint32_t maxInventoryItems{ 8 };
 		bool          showAI{ true };
+		bool          showAliases{ true };
+		std::uint32_t maxAliases{ 12 };
 		bool          showWorn{ true };
 		std::uint32_t maxWornItems{ 16 };
 		bool          showWornModels{ true };
 
-		// Experimental: calls through the game's function tables; confirm in game before relying on them
+		// Details: extra information, off by default to keep the panel short
 		bool        showActorState{ false };
 		bool        showMaterialSwaps{ false };
 		std::uint32_t maxSwapEntries{ 6 };

@@ -15,7 +15,7 @@ namespace MIC::ConsolePanel
 
 		constexpr const char* kPanelName = "MIC_SF_InfoPanel";
 		constexpr const char* kTextName = "MIC_SF_InfoText";
-		constexpr double      kPadding = 6.0;
+		double Padding() { return Settings::Get().padding; }
 
 		struct State
 		{
@@ -45,6 +45,8 @@ namespace MIC::ConsolePanel
 			double        panelHeight{ 0.0 };
 			double        drawnScrollV{ 1.0 };  // scroll position the scroll bar was drawn for
 			std::uint32_t keyFrames{ 0 };       // frames a scroll key has been held
+			bool          hidden{ false };      // hidden with the show/hide key (until shown again)
+			bool          toggleHeld{ false };
 			std::uint32_t layoutVersion{ 0 };
 		};
 
@@ -132,8 +134,6 @@ namespace MIC::ConsolePanel
 			Set(a_panel, "mouseChildren", Value(false));
 
 			Set(a_text, "name", Value(kTextName));
-			Set(a_text, "x", Value(kPadding));
-			Set(a_text, "y", Value(kPadding));
 
 			Set(a_text, "multiline", Value(true));
 			Set(a_text, "wordWrap", Value(true));
@@ -159,6 +159,8 @@ namespace MIC::ConsolePanel
 			Set(a_panel, "mouseChildren", Value(settings.scrollWithMouse));
 			Set(a_text, "mouseEnabled", Value(settings.scrollWithMouse));
 			Set(a_text, "mouseWheelEnabled", Value(settings.scrollWithMouse));
+			Set(a_text, "x", Value(settings.padding));
+			Set(a_text, "y", Value(settings.padding));
 			Value       history;
 			if (Member(a_console, "CommandHistory", history)) {
 				Value format;
@@ -217,12 +219,12 @@ namespace MIC::ConsolePanel
 			const double bottomV = Member(a_text, "bottomScrollV", v) ? Num(v, scrollV) : scrollV;
 			const double visible = std::max(1.0, bottomV - scrollV + 1.0);
 			const double total = std::max(visible, maxScrollV + visible - 1.0);
-			const double track = state.panelHeight - 2 * kPadding;
+			const double track = state.panelHeight - 2 * Padding();
 			const double thumb = std::min(track, std::max(12.0, track * visible / total));
 			const double at = maxScrollV > 1.0 ? (scrollV - 1.0) / (maxScrollV - 1.0) : 0.0;
 			Value barFill[2]{ Value(settings.labelColor & 0xFFFFFF), Value(0.7) };
 			graphics.Invoke("beginFill", nullptr, barFill, 2);
-			Value bar[4]{ Value(state.panelWidth - 5.0), Value(kPadding + (track - thumb) * at), Value(3.0), Value(thumb) };
+			Value bar[4]{ Value(state.panelWidth - 5.0), Value(Padding() + (track - thumb) * at), Value(3.0), Value(thumb) };
 			graphics.Invoke("drawRect", nullptr, bar, 4);
 			graphics.Invoke("endFill");
 		}
@@ -290,7 +292,7 @@ namespace MIC::ConsolePanel
 			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
 			const double screenWidth = std::clamp(usable * settings.widthPercent / 100.0, std::min(120.0, usable), usable);
 			const double width = screenWidth / scale;
-			Set(a_text, "width", Value(width - 2 * kPadding));
+			Set(a_text, "width", Value(width - 2 * Padding()));
 			Set(a_text, "autoSize", Value("left"));  // measure the whole text first
 
 			Value        heightVal;
@@ -305,7 +307,7 @@ namespace MIC::ConsolePanel
 			if (viewT > -1.0e8 && viewB < 1.0e8) {
 				room = std::min(room, (viewB - viewT) * settings.maxHeightPercent / 100.0 - 2 * margin);
 			}
-			const double maxText = room / scale - 2 * kPadding;
+			const double maxText = room / scale - 2 * Padding();
 			double       textHeight = fullText;
 			state.scrollable = false;
 			if (maxText > 40.0 && fullText > maxText) {
@@ -314,7 +316,7 @@ namespace MIC::ConsolePanel
 				textHeight = maxText;
 				state.scrollable = true;
 			}
-			const double height = textHeight + 2 * kPadding;
+			const double height = textHeight + 2 * Padding();
 			const double screenHeight = height * scale;
 			state.panelWidth = width;
 			state.panelHeight = height;
@@ -394,8 +396,8 @@ namespace MIC::ConsolePanel
 				PrintToConsole(id, ref);
 			}
 
-			if (!settings.showPanel) {
-				HideExistingPanel(console);
+			if (!settings.showPanel || state.hidden) {
+				HideExistingPanel(console);  // off, or hidden with the show/hide key
 				return;
 			}
 
@@ -488,7 +490,28 @@ namespace MIC::ConsolePanel
 
 	namespace
 	{
-		// Scrolls the panel by a page (a_direction -1 or 1).
+		// Shows or hides the panel right away (the show/hide key), without waiting for a refresh.
+		void SetPanelVisible(bool a_visible)
+		{
+			auto* ui = RE::UI::GetSingleton();
+			if (!ui) {
+				return;
+			}
+			static const RE::BSFixedString consoleName{ "Console" };
+			auto menu = ui->GetMenu(consoleName);
+			if (!menu || !menu->uiMovie) {
+				return;
+			}
+			Value console;
+			Value panel;
+			Value panelName(kPanelName);
+			if (GetConsoleClip(*menu->uiMovie, *menu, console) &&
+				console.Invoke("getChildByName", &panel, &panelName, 1) && panel.IsDisplayObject()) {
+				Set(panel, "visible", Value(a_visible && GetState().shownID != 0));
+			}
+		}
+
+		// Scrolls the panel by iScrollLines lines, or a page (a_direction -1 or 1).
 		void ScrollPanel(int a_direction)
 		{
 			auto* ui = RE::UI::GetSingleton();
@@ -516,8 +539,9 @@ namespace MIC::ConsolePanel
 			const double scrollV = Member(text, "scrollV", v) ? Num(v, 1.0) : 1.0;
 			const double bottomV = Member(text, "bottomScrollV", v) ? Num(v, scrollV) : scrollV;
 			const double maxScrollV = Member(text, "maxScrollV", v) ? Num(v, 1.0) : 1.0;
-			const double page = std::max(1.0, bottomV - scrollV);
-			Set(text, "scrollV", Value(std::clamp(scrollV + a_direction * page, 1.0, std::max(1.0, maxScrollV))));
+			const auto   lines = Settings::Get().scrollLines;
+			const double step = lines > 0 ? static_cast<double>(lines) : std::max(1.0, bottomV - scrollV);  // 0 = a page
+			Set(text, "scrollV", Value(std::clamp(scrollV + a_direction * step, 1.0, std::max(1.0, maxScrollV))));
 			DrawBackground(panel, text);
 		}
 	}
@@ -544,16 +568,27 @@ namespace MIC::ConsolePanel
 			state.lastPrintedID = 0;  // print again for the same reference after reopening
 			return;
 		}
-		// Scroll keys, checked every frame so scrolling feels immediate: one page on press, then
-		// another every 8 frames while held.
 		const auto& settings = Settings::Get();
-		if (settings.scrollKeys && state.scrollable) {
+
+		// Show/hide key: acts on the press, not while held.
+		if (settings.toggleKey != 0) {
+			const bool held = (GetAsyncKeyState(static_cast<int>(settings.toggleKey)) & 0x8000) != 0;
+			if (held && !state.toggleHeld) {
+				state.hidden = !state.hidden;
+				SetPanelVisible(!state.hidden);
+			}
+			state.toggleHeld = held;
+		}
+
+		// Scroll keys, checked every frame so scrolling feels immediate: one step on press, then
+		// another every iScrollRepeatFrames frames while held.
+		if (settings.scrollKeys && state.scrollable && !state.hidden) {
 			const bool down = (GetAsyncKeyState(static_cast<int>(settings.scrollDownKey)) & 0x8000) != 0;
 			const bool up = (GetAsyncKeyState(static_cast<int>(settings.scrollUpKey)) & 0x8000) != 0;
 			const int  direction = down ? 1 : (up ? -1 : 0);
 			if (direction == 0) {
 				state.keyFrames = 0;
-			} else if (state.keyFrames++ % 8 == 0) {
+			} else if (state.keyFrames++ % std::max<std::uint32_t>(1, settings.scrollRepeatFrames) == 0) {
 				ScrollPanel(direction);
 			}
 		}

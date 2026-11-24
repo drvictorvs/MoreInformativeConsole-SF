@@ -640,10 +640,10 @@ namespace MIC
 			}
 		}
 
-		void AddExperimentalActor(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
+		void AddActorSection(std::vector<InfoSection>& a_out, RE::Actor* a_actor)
 		{
 			const auto& settings = Settings::Get();
-			InfoSection sec{ "Actor (experimental)", {} };
+			InfoSection sec{ "Actor", {} };
 
 			if (settings.showActorState) {
 				std::vector<std::string> state;
@@ -1220,7 +1220,7 @@ namespace MIC
 				return;
 			}
 
-			InfoSection sec{ "Magic effects (experimental)", {} };
+			InfoSection sec{ "Magic effects", {} };
 			sec.lines.push_back({ "Active", total > count ? std::format("{}, first {} shown", total, count) : std::to_string(total) });
 			for (std::size_t i = 0; i < count; ++i) {
 				const auto& e = copied[i];
@@ -1247,6 +1247,70 @@ namespace MIC
 					parts.push_back("no time limit");
 				}
 				sec.lines.push_back({ "  " + (setting ? Describe(setting) : std::string("(unknown effect)")), Join(parts) });
+			}
+			a_out.push_back(std::move(sec));
+		}
+
+		// Quest aliases the reference fills: its ExtraAliasInstanceArray (extra type 0x80). Layout from
+		// the alias walkers (IDs 45555, 45566): entries of 0x18 bytes with the quest at +0 and the
+		// BGSBaseAlias* at +8; size at +0x18, data at +0x20, a BSReadWriteLock at +0x28. BGSBaseAlias
+		// (from the ShowQuestAliases printer, ID 68500): name BSFixedString at +0x08, alias ID at +0x20.
+		void AddAliasesSection(std::vector<InfoSection>& a_out, RE::TESObjectREFR* a_ref)
+		{
+			const auto& settings = Settings::Get();
+			if (!Address::Get().inventory || settings.maxAliases == 0) {
+				return;  // the inventory group checks the read-lock functions used here
+			}
+			auto* list = a_ref->extraDataList.get();
+			if (!list || !Safe::Readable(list, sizeof(RE::ExtraDataList))) {
+				return;
+			}
+			const auto* extra = reinterpret_cast<const std::byte*>(list->GetByType(RE::ExtraDataType::kAliasInstanceArray));
+			if (!extra || !Safe::Readable(extra, 0x30)) {
+				return;
+			}
+
+			struct Alias
+			{
+				const void*   quest{ nullptr };
+				std::string   name;
+				std::uint32_t id{ 0 };
+			};
+			std::vector<Alias> aliases;
+			std::size_t        total = 0;
+			constexpr std::size_t kEntry = 0x18;
+
+			auto* lock = reinterpret_cast<RE::BSReadWriteLock*>(const_cast<std::byte*>(extra + 0x28));
+			lock->LockRead();
+			RawArray entries{};
+			if (ReadRawArray(extra + 0x18, kEntry, 1024, entries)) {
+				total = entries.size;
+				for (std::uint32_t i = 0; i < entries.size && aliases.size() < settings.maxAliases; ++i) {
+					const auto* entry = entries.data + i * kEntry;
+					Alias       a;
+					const std::byte* alias = nullptr;
+					std::memcpy(&a.quest, entry, sizeof(a.quest));
+					std::memcpy(&alias, entry + 8, sizeof(alias));
+					if (alias && Safe::Readable(alias, 0x24)) {
+						a.name = Safe::FixedString(alias + 0x08, 128);
+						std::memcpy(&a.id, alias + 0x20, sizeof(a.id));
+					}
+					aliases.push_back(std::move(a));
+				}
+			}
+			lock->UnlockRead();
+			if (aliases.empty()) {
+				return;
+			}
+
+			InfoSection sec{ "Quest aliases", {} };
+			if (total > aliases.size()) {
+				sec.lines.push_back({ "Aliases", std::format("{}, first {} shown", total, aliases.size()) });
+			}
+			for (const auto& a : aliases) {
+				auto* quest = Safe::FormAs<RE::TESQuest>(a.quest);
+				sec.lines.push_back({ quest ? Describe(quest) : std::string("(unknown quest)"),
+					std::format("{} (alias {})", a.name.empty() ? "(unnamed)" : a.name, a.id) });
 			}
 			a_out.push_back(std::move(sec));
 		}
@@ -1345,6 +1409,11 @@ namespace MIC
 			sections.push_back(std::move(sec));
 		}
 
+		if (settings.showAliases) {
+			ScopedTimer timer{ "[Quest aliases]" };
+			AddAliasesSection(sections, a_ref);
+		}
+
 		if (actor) {
 			if (settings.showNPC) {
 				{
@@ -1366,8 +1435,8 @@ namespace MIC
 			}
 			if (settings.showActorState || settings.showActorValues) {
 				{
-					ScopedTimer timer{ "[Actor experimental]" };
-					AddExperimentalActor(sections, actor);
+					ScopedTimer timer{ "[Actor]" };
+					AddActorSection(sections, actor);
 				}
 			}
 			if (settings.showMagicEffects) {

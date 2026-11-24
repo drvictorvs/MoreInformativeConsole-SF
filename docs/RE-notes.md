@@ -111,6 +111,14 @@ From the `HasMagicEffect` condition (ID 65160), which calls the list walker ID 1
 
 Default objects are `BGSDefaultObject` (DFOB) forms whose editor ID is the default object's name, so `TESForm::LookupByEditorID` (ID 47403) finds them; `object` (+0x48) points to the target form. The hide-spacesuit and hide-helmet actor values are reached through `ActorShouldHideSpacesuitCosmeticSettlementAV_DO` and `ActorShouldHideSpacesuitHelmetCosmeticBreathableAV_DO` (names from the executable).
 
+## Quest aliases on a reference
+
+`ExtraAliasInstanceArray` (extra type 0x80; CommonLibSF has its type and vtable IDs but no layout). From the walkers IDs 45555 and 45566, reached through 45039/45043 (which take the reference's `ExtraDataList` read lock at +0x20 for the lookup):
+
+- Array `{ u32 size; u32 capacity; Entry* data }` at +0x18, `BSReadWriteLock` at +0x28.
+- Entry, 0x18 bytes: quest at +0x00 (checked at run time to be a `TESQuest`), `BGSBaseAlias*` at +0x08.
+- `BGSBaseAlias` (from the `ShowQuestAliases` printer, ID 68500): name `BSFixedString` at +0x08, alias ID at +0x20, alias kind from vtable +0x28 (0 reference, 1 reference collection, 2 location). A quest's own aliases are at quest +0x90 (count at +0x88).
+
 ## Contributing to CommonLibSF
 
 `libxse/commonlibsf` (which OSF's fork syncs from) still has both at 0 in `include/RE/IDs.h`:

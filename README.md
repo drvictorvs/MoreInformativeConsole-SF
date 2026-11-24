@@ -9,12 +9,13 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 | NPC | Race and its plugin; essential, protected, unique, invulnerable, ghost, respawns, sex; level (or player-scaled range); leveled template; factions (name, editor ID where the game keeps one, form ID) with ranks and the live rank when it differs, on one line or as a list; dead, combat search, in water |
 | AI & animation | Running AI package (and the normal one under a run-once override), package type and step, queued idle with its animation event, graph and file, furniture in use, the line being spoken, follower command, light level |
 | Lock | Locked or not; the game's own category name and level (e.g. "Requires Key (255)", "Hard (60, leveled: base 40 + area level 20 x 1)"); locks shared from the linked door; key |
+| Quest aliases | Each quest alias the reference fills: the quest (name, editor ID, form ID), alias name and alias ID |
 | Inventory | Kinds and total count, first N items with counts, equipped marked `[E]` |
 | Worn (actors) | Biped slots in use and any overlap; each worn item with its slot bits; the armor addon picked for the actor's race and its model path for the actor's sex |
 | Position | Coordinates, rotation, scale, cell and its plugin, location, parent locations |
-| Experimental (off by default) | Combat, invulnerable, talking, scene; actor values, each optional (health, oxygen, carry weight, speed, AI values, the hide-spacesuit and hide-helmet toggles, and any others you name by editor ID), shown as current value and base, on one line or as a list; active magic effects with their source, caster, magnitude and time left; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
+| Details (off by default) | Combat, invulnerable, talking, scene; actor values, each optional (health, oxygen, carry weight, speed, AI values, the hide-spacesuit and hide-helmet toggles, and any others you name by editor ID), shown as current value and base, on one line or as a list; active magic effects with their source, caster, magnitude and time left; animation graph variables you name; material swaps (layered material swap forms and their material -> override pairs) for the base model and each worn addon; object size; gravity; engine debug text |
 
-Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. When the information is taller than the screen (or a maximum height you set), the panel scrolls with the mouse wheel or PageUp/PageDown. Menu changes apply right away, the next time the console panel refreshes.
+Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. When the information is taller than the screen (or a maximum height you set), the panel scrolls with PageUp/PageDown (lines per step and repeat speed are adjustable), or with the mouse wheel if you turn that on. Tab shows or hides the panel while the console is open (the key can be changed or turned off). Menu changes apply right away, the next time the console panel refreshes.
 
 Status: 1.2 is confirmed in game and released on Nexus Mods. 
 
@@ -38,12 +39,12 @@ So at load, `AddressCheck.cpp` checks every ID the plugin can reach, directly or
 | `ConsoleLog` | `bPrintToConsole` is ignored. |
 | `TESObjectREFR::GetCurrentLocation` | No "Location" line. |
 | `TESDataHandler` | "Defined in" shows `unknown`. |
-| `BSReadWriteLock` read lock | No Inventory, Worn or Lock section. |
+| `BSReadWriteLock` read lock | No Inventory, Worn, Lock, Quest aliases or Magic effects section. |
 | `Actor::GetFactionRank` | Factions show base ranks only. |
 | Handle lookup or `TESForm::DecRefCount` | No Furniture line. |
-| `ActorValue::GetSingleton` | No actor values (experimental). |
+| `ActorValue::GetSingleton` | No actor values. |
 | Lock IDs in `GameIDs.h` (lock getter, area level, lock-level settings) | Lock shows the raw level only, and only the reference's own lock. |
-| Material swap lookup in `GameIDs.h` | No material swaps (experimental). |
+| Material swap lookup in `GameIDs.h` | No material swaps. |
 
 The log lists each missing ID and ends with an `Address check:` line giving each feature `true` or `false`.
 
@@ -55,7 +56,7 @@ Most new sections read fields straight from game memory, using CommonLibSF's map
 - A form pointer is trusted only if the engine's form table maps its form ID back to the same address.
 - Strings (idle names, spoken lines, model paths) are copied a page at a time, with each page checked first.
 
-**Experimental options** are different: they call the game's own functions through its function tables. The Address Library check can't cover those, and a wrong slot in CommonLibSF's map crashes outright. That's why they're off by default. Turn them on one at a time; if one crashes the game, turn it off and send me the Trainwreck log. Editor position was left out for that reason (its function shares a name with two others, the most error-prone case).
+**Details options** (actor state and values, magic effects, material swaps, graph variables, size, gravity, engine text) are confirmed on 1.16.244 and off by default only to keep the panel short. Some call the game's own functions through its function tables, which the Address Library check can't cover, so after a game update, if turning one on crashes the game, turn it off and send me the Trainwreck log. Editor position was left out for that reason (its function shares a name with two others, the most error-prone case).
 
 **When adding code:** if a new call reaches an engine function, add its ID to the list in `AddressCheck.cpp` and guard the call with the matching flag. Search `include/RE/IDs.h` for `{ 0 }` first: those are known placeholders and must not be called at all.
 
