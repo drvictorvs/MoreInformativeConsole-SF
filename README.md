@@ -9,7 +9,7 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 
 Optionally, the same text can also be printed into the console history (`bPrintToConsole`).
 
-Status: 0.1.1, not yet confirmed in game. 0.1.0 stopped the game with an Address Library error because it called `TESObjectREFR::GetScale`, whose ID is a 0 placeholder in this CommonLibSF fork. 0.1.1 reads the stored scale instead, and adds the safety check below.
+Status: 1.0, confirmed in game. 0.1.0 stopped the game with an Address Library error because it called `TESObjectREFR::GetScale`, whose ID is a 0 placeholder in this CommonLibSF fork. 0.1.1 reads the stored scale instead, and adds the safety check below. 1.0 is just a re-versioning to confirm that it works and was released at NexusMods.
 
 ## How it works (and how it differs from the Skyrim mod)
 
