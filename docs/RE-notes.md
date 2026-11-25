@@ -119,6 +119,15 @@ Default objects are `BGSDefaultObject` (DFOB) forms whose editor ID is the defau
 - Entry, 0x18 bytes: quest at +0x00 (checked at run time to be a `TESQuest`), `BGSBaseAlias*` at +0x08.
 - `BGSBaseAlias` (from the `ShowQuestAliases` printer, ID 68500): name `BSFixedString` at +0x08, alias ID at +0x20, alias kind from vtable +0x28 (0 reference, 1 reference collection, 2 location). A quest's own aliases are at quest +0x90 (count at +0x88).
 
+## Console selection highlight
+
+The game can already highlight the reference selected in the console; its color is the INI setting `aConsoleSelectedRefColor:Menu` (`[Menu]` section of Starfield.ini), default 0, i.e. transparent.
+
+- The setting is a static `SettingT<INISettingCollection>` (vtable ID 393317) in the console's group of `[Menu]` settings: object ID 830364, value at +8 (**830365**), key `const char*` at +0x18 (**830367**). `INISettingCollection::Singleton` is 944389.
+- The value is `0xAARRGGBB`: the same as the hex that `setini "aConsoleSelectedRefColor:Menu" FFC6331E` takes and `getini` prints. In the INI file it's written `r,g,b,a` in decimal.
+- The console's set-selected-reference function (ID 113588; `this`, new handle in edx, a bool in r8b; the current handle is at `this`+0x58) reads the value on every change. If the value is non-zero, it removes the old reference's highlight (through the handle it keeps at `this`+0x5C) and highlights the new reference's 3D. It unpacks the color with masks `0xFF0000`, `0xFF00`, `0xFF`, `0xFF000000` into floats R, G, B, A. With 0 it does neither: setting 0 while something is highlighted leaves that highlight on, so the mod writes 1 (transparent) instead.
+- So the color is taken at selection time: a change shows from the next selected reference.
+
 ## Contributing to CommonLibSF
 
 `libxse/commonlibsf` (which OSF's fork syncs from) still has both at 0 in `include/RE/IDs.h`:

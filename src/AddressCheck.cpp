@@ -175,12 +175,16 @@ namespace MIC::Address
 			f.materialSwaps = CheckGroup("Material swaps", {
 				{ GameID::GetModelMaterialSwaps, "GetModelMaterialSwaps (found for this mod)" },
 			});
+			f.selectionHighlight = CheckGroup("Selection highlight", {
+				{ GameID::aConsoleSelectedRefColor, "aConsoleSelectedRefColor:Menu value (found for this mod)" },
+				{ GameID::aConsoleSelectedRefColor_Key, "aConsoleSelectedRefColor:Menu name (found for this mod)" },
+			});
 
 			if (!f.core) {
 				REX::ERROR("Core functions are missing for this game version; the plugin stays inactive");
 			}
-			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={} materialSwaps={} editorIDs={} lookupByEditorID={}",
-				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails, f.materialSwaps, f.editorIDs, f.lookupByEditorID);
+			REX::INFO("Address check: panel={} consolePrint={} location={} pluginNames={} inventory={} factionRank={} furniture={} actorValues={} lockDetails={} materialSwaps={} editorIDs={} lookupByEditorID={} selectionHighlight={}",
+				f.core, f.consolePrint, f.location, f.dataHandler, f.inventory, f.factionRank, f.furniture, f.actorValues, f.lockDetails, f.materialSwaps, f.editorIDs, f.lookupByEditorID, f.selectionHighlight);
 			return f;
 		}
 	}

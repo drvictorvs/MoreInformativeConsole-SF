@@ -61,6 +61,12 @@ namespace MIC
 				{ "Panel", "iLabelColor", "labelColor", Kind::Color, &s.labelColor },
 				{ "Panel", "iHeaderColor", "headerColor", Kind::Color, &s.headerColor },
 
+				{ "Highlight", "bHighlightSelection", "highlightSelection", Kind::Bool, &s.highlightSelection },
+				// As with the background, the menu edits color and opacity in one color setting.
+				{ "Highlight", "iHighlightColor", nullptr, Kind::Color, &s.highlightColor },
+				{ "Highlight", "fHighlightAlpha", nullptr, Kind::Double, &s.highlightAlpha, 0, 1 },
+				{ "Highlight", "", "highlight", Kind::ColorAlpha, &s.highlightColor, 0, 0, &s.highlightAlpha },
+
 				{ "Content", "bShowReference", "showReference", Kind::Bool, &s.showReference },
 				{ "Content", "bShowBase", "showBase", Kind::Bool, &s.showBase },
 				{ "Content", "bShowModel", "showModel", Kind::Bool, &s.showModel },

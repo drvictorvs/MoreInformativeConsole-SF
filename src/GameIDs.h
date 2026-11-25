@@ -55,6 +55,16 @@ namespace MIC::GameID
 	//   +0x18 capacity (power of two)   +0x30 BSReadWriteLock
 	inline constexpr REL::ID EditorIDMap{ 883342 };
 
+	// Console selection highlight: the "aConsoleSelectedRefColor:Menu" INI setting
+	// (SettingT<INISettingCollection>, object ID 830364; value at +8, key at +0x18). The value is
+	// 0xAARRGGBB, the same as `setini "aConsoleSelectedRefColor:Menu" AARRGGBB` (the INI file takes
+	// r,g,b,a). Default 0. The console's set-selected-reference function (ID 113588; the selected
+	// handle is at +0x58 of its object) reads it on each change: if it's non-zero, it removes the
+	// highlight from the previous reference and highlights the new one in that color, unpacked as
+	// R = bits 16-23, G = 8-15, B = 0-7, A = 24-31. With 0 it does neither.
+	inline constexpr REL::ID aConsoleSelectedRefColor{ 830365 };      // std::uint32_t
+	inline constexpr REL::ID aConsoleSelectedRefColor_Key{ 830367 };  // const char*
+
 	// Layouts confirmed on 1.16.244. CommonLibSF's compiled layout agrees (its offset comments are
 	// stale), except that its biped slot mask is 32-bit; the game's is 64-bit. Read only through SafeMemory.
 	namespace Layout

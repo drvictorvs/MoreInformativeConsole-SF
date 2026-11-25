@@ -2,6 +2,7 @@
 
 #include "AddressCheck.h"
 #include "FormInfo.h"
+#include "Highlight.h"
 #include "Settings.h"
 
 // user32 (linked in xmake.lua). Declared here because the shared Windows wrappers don't have it.
@@ -24,6 +25,7 @@ namespace MIC::ConsolePanel
 			RE::TESFormID lastPrintedID{ 0 };
 			std::string   lastHTML;
 			std::uint32_t appliedStyle{ 0 };  // Settings::version the panel was styled with
+			std::uint32_t highlightVersion{ 0 };  // Settings::version the selection highlight was set from
 			bool          loggedNoParse{ false };
 			bool          loggedNoBounds{ false };
 
@@ -557,6 +559,11 @@ namespace MIC::ConsolePanel
 		// OSF Settings changes arrive on another thread; re-read them here, on the game thread.
 		if (OSF::ConsumeChanged()) {
 			Settings::Get().Load();
+		}
+		// The selection highlight applies with the console closed too, so it's set here, not below.
+		if (state.highlightVersion != Settings::Get().version) {
+			state.highlightVersion = Settings::Get().version;
+			Highlight::Apply();
 		}
 
 		auto* ui = RE::UI::GetSingleton();

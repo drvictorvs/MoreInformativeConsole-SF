@@ -39,6 +39,12 @@
       { "key": "background", "type": "color", "label": "Background", "default": "#000000A6", "alpha": true,
         "hint": "Color and opacity of the panel's background." }
     ],
+    "Selection highlight": [
+      { "key": "highlightSelection", "type": "bool", "label": "Highlight the selected reference", "default": true,
+        "hint": "Uses the game's own console selection highlight. A new color shows from the next reference you select. Off leaves the game's setting alone." },
+      { "key": "highlight", "type": "color", "label": "Highlight", "default": "#F2C14EFF", "alpha": true,
+        "hint": "Color and opacity of the highlight." }
+    ],
     "Sections": [
       { "key": "showReference", "type": "bool", "label": "Reference", "default": true },
       { "key": "showBase", "type": "bool", "label": "Base object", "default": true },
