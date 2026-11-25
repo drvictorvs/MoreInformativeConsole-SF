@@ -57,6 +57,10 @@ namespace MIC
 				{ "Panel", "iLabelColor", "labelColor", Kind::Color, &s.labelColor },
 				{ "Panel", "iHeaderColor", "headerColor", Kind::Color, &s.headerColor },
 
+				{ "Highlight", "bHighlightSelection", "highlightSelection", Kind::Bool, &s.highlightSelection },
+				{ "Highlight", "iHighlightColor", "highlightColor", Kind::Color, &s.highlightColor },
+				{ "Highlight", "fHighlightAlpha", "highlightOpacity", Kind::Double, &s.highlightAlpha, 0, 1 },
+
 				{ "Content", "bShowReference", "showReference", Kind::Bool, &s.showReference },
 				{ "Content", "bShowBase", "showBase", Kind::Bool, &s.showBase },
 				{ "Content", "bShowModel", "showModel", Kind::Bool, &s.showModel },
