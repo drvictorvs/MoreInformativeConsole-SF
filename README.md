@@ -67,7 +67,7 @@ Most new sections read fields straight from game memory, using CommonLibSF's map
 ## Requirements
 
 - SFSE and Address Library for SFSE Plugins.
-- Optional: OSF Settings 1.0 (for the in-game menu). Without it, the INI is used.
+- Optional: OSF Settings with color settings (settings API 1.1), for the in-game menu. Without it, the INI is used.
 - To build: Visual Studio 2022 Build Tools (C++), XMake 3.0+ and Git.
 
 ## Build
@@ -101,4 +101,4 @@ Scrollable extra-info windows, quest pages, texture lists, owner and enable pare
 
 ## License
 
-GPL-3.0-or-later with CommonLibSF's modding exception (links against CommonLibSF). `src/vendor/OSFSettings.h` is copied unchanged from OSF Settings (GPL-3.0 with its modding exception), commit `a7ffa18`, the release pairing OSF UI 2.0 names.
+GPL-3.0-or-later with CommonLibSF's modding exception (links against CommonLibSF). `src/vendor/OSFSettings.h` is copied unchanged from OSF Settings (GPL-3.0 with its modding exception), settings API 1.1 with color settings (commit `2ca7c11` of the `color-setting` branch).

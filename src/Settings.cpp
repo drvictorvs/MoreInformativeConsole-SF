@@ -11,7 +11,8 @@ namespace MIC
 			Bool,
 			UInt,
 			Double,
-			Color,   // INI: 0xRRGGBB; OSF: string "#RRGGBB"
+			Color,       // INI: 0xRRGGBB; OSF: color setting
+			ColorAlpha,  // OSF only: color setting with opacity, into target (0xRRGGBB) and alphaTarget (0-1)
 			String,
 			Align    // INI: bAlignRight 0/1; OSF: enum "left"/"right"
 		};
@@ -25,6 +26,7 @@ namespace MIC
 			void*       target;
 			double      min{ 0.0 };
 			double      max{ 0.0 };  // max <= min: no clamp
+			double*     alphaTarget{ nullptr };  // ColorAlpha only
 		};
 
 		std::vector<Option> Options(Settings& s)
@@ -52,8 +54,10 @@ namespace MIC
 				{ "Panel", "fMargin", "margin", Kind::Double, &s.margin, 0.0, 200.0 },
 				{ "Panel", "fOffsetX", "offsetX", Kind::Double, &s.offsetX },
 				{ "Panel", "fOffsetY", "offsetY", Kind::Double, &s.offsetY },
-				{ "Panel", "iBackgroundColor", "backgroundColor", Kind::Color, &s.backgroundColor },
-				{ "Panel", "fBackgroundAlpha", "backgroundOpacity", Kind::Double, &s.backgroundAlpha, 0, 1 },
+				// The INI keeps color and opacity apart; the menu edits both in one color setting.
+				{ "Panel", "iBackgroundColor", nullptr, Kind::Color, &s.backgroundColor },
+				{ "Panel", "fBackgroundAlpha", nullptr, Kind::Double, &s.backgroundAlpha, 0, 1 },
+				{ "Panel", "", "background", Kind::ColorAlpha, &s.backgroundColor, 0, 0, &s.backgroundAlpha },
 				{ "Panel", "iLabelColor", "labelColor", Kind::Color, &s.labelColor },
 				{ "Panel", "iHeaderColor", "headerColor", Kind::Color, &s.headerColor },
 
@@ -175,6 +179,8 @@ namespace MIC
 			case Kind::Color:
 				if (const auto v = ParseColor(a_value)) *static_cast<std::uint32_t*>(a_opt.target) = *v & 0xFFFFFF;
 				break;
+			case Kind::ColorAlpha:  // no INI key
+				break;
 			case Kind::String:
 				*static_cast<std::string*>(a_opt.target) = a_value;
 				break;
@@ -281,10 +287,27 @@ namespace MIC
 					}
 				case Kind::Color:
 					{
-						std::string v;
-						status = client.GetString(OSF::kModID, opt.osfKey, v);
+						std::uint32_t rgba{};
+						status = client.GetColor(OSF::kModID, opt.osfKey, &rgba);
 						if (status == Status::Ok) {
-							if (const auto c = ParseColor(v)) *static_cast<std::uint32_t*>(opt.target) = *c & 0xFFFFFF;
+							*static_cast<std::uint32_t*>(opt.target) = rgba >> 8;
+						} else if (status == Status::TypeMismatch || status == Status::Unsupported) {
+							// A schema from 1.3 or earlier, which stored colors as "#RRGGBB" text.
+							std::string v;
+							status = client.GetString(OSF::kModID, opt.osfKey, v);
+							if (status == Status::Ok) {
+								if (const auto c = ParseColor(v)) *static_cast<std::uint32_t*>(opt.target) = *c & 0xFFFFFF;
+							}
+						}
+						break;
+					}
+				case Kind::ColorAlpha:
+					{
+						std::uint32_t rgba{};
+						status = client.GetColor(OSF::kModID, opt.osfKey, &rgba);
+						if (status == Status::Ok) {
+							*static_cast<std::uint32_t*>(opt.target) = rgba >> 8;
+							*opt.alphaTarget = (rgba & 0xFF) / 255.0;
 						}
 						break;
 					}
