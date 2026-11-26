@@ -256,12 +256,40 @@ namespace MIC
 		}
 
 		std::atomic<bool> g_osfChanged{ false };
+		std::atomic<bool> g_boxEdited{ false };
 		bool              g_osfAvailable{ false };
 
-		void OnOSFChanged(const char*, const char*, void*) noexcept
+		constexpr std::array kBoxKeys{ "boxLeft", "boxTop", "boxWidth", "boxHeight" };
+
+		void OnOSFChanged(const char*, const char* a_key, void*) noexcept
 		{
-			// May run on any thread: only flag it; the game thread re-reads.
+			// May run on any thread: only flag it; the game thread re-reads. A null key is a full
+			// refresh (startup or a reset of the whole page), not an edit of the box.
+			if (a_key && std::ranges::any_of(kBoxKeys, [&](const char* box) { return std::string_view(a_key) == box; })) {
+				g_boxEdited.store(true);
+			}
 			g_osfChanged.store(true);
+		}
+
+		// The box only places the panel with Position set to Custom box, so saving a changed box in
+		// the placement editor selects it. Saving the default box (Defaults, or a reset) doesn't.
+		void FollowBoxEdit(Settings& a_settings)
+		{
+			if (!g_boxEdited.exchange(false) || !g_osfAvailable || a_settings.position == PanelPosition::Custom) {
+				return;
+			}
+			const Settings defaults{};
+			if (a_settings.boxLeft == defaults.boxLeft && a_settings.boxTop == defaults.boxTop &&
+				a_settings.boxWidth == defaults.boxWidth && a_settings.boxHeight == defaults.boxHeight) {
+				return;
+			}
+			const auto status = Client().SetEnum(OSF::kModID, "alignment", "custom");
+			if (status == OSFSettings::API::Status::Ok) {
+				a_settings.position = PanelPosition::Custom;
+				REX::INFO("Custom box edited: Position set to Custom box");
+			} else {
+				REX::WARN("Custom box edited, but setting Position to Custom box failed (status {})", std::to_underlying(status));
+			}
 		}
 
 		void LoadOSF(Settings& a_settings)
@@ -348,6 +376,7 @@ namespace MIC
 		*this = Settings{};
 		LoadINI(*this);
 		LoadOSF(*this);
+		FollowBoxEdit(*this);
 		version = keepVersion + 1;
 
 		const char* where = position == PanelPosition::Custom ? "custom" : position == PanelPosition::Left ? "left" : "right";
