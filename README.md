@@ -17,7 +17,7 @@ A Starfield take on Skyrim's More Informative Console. Click a reference with th
 
 While the console is open, the selected reference is also **highlighted** with the same color fill and outline the hand scanner and outpost building use, drawn over the whole object whatever its materials. Its color, fill opacity and outline thickness are settings; the highlight goes away when the console closes.
 
-Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. When the information is taller than the screen (or a maximum height you set), the panel scrolls with PageUp/PageDown (lines per step and repeat speed are adjustable), or with the mouse wheel if you turn that on. Tab shows or hides the panel while the console is open (the key can be changed or turned off). Menu changes apply right away, the next time the console panel refreshes.
+Everything is configurable in the **OSF Settings** menu (under "More Informative Console") when OSF Settings is installed, or in `MoreInformativeConsoleSF.ini` otherwise: each section, width, position, **scale**, **font size**, colors and opacity. The panel sits beside the console, or anywhere on screen in a **custom box**: in OSF Settings you drag and resize the box on a copy of the screen. When the information is taller than the screen (or a maximum height you set), the panel scrolls with PageUp/PageDown (lines per step and repeat speed are adjustable), or with the mouse wheel if you turn that on. Tab shows or hides the panel while the console is open (the key can be changed or turned off). Menu changes apply right away, the next time the console panel refreshes.
 
 Status: 1.3 is confirmed in game.
 
@@ -26,7 +26,7 @@ Status: 1.3 is confirmed in game.
 Skyrim's MIC ships a replacement `console.swf` (ActionScript 2) that calls functions registered by its SKSE plugin. Starfield's console is ActionScript 3, gets its data from the game through Bethesda's data-shuttle system, and SFSE has no way to register Scaleform functions. So this mod takes another route, and **does not replace `console.swf`**:
 
 1. **Which reference is selected.** The game writes the selection into the console's `CurrentSelection` text field (through the SWF's `currentSelection` setter). The plugin reads that text and takes the form ID from it, e.g. `Sarah Morgan (00005791)`. This avoids hunting for an engine address that changes with each patch.
-2. **The panel.** The plugin builds the panel at runtime inside the console movie: a Sprite with a TextField, added to `Menu_mc`. It borrows the console history's font, size and color, so it also matches console reskins. It sits just above the console's background, at the right edge by default.
+2. **The panel.** The plugin builds the panel at runtime inside the console movie: a Sprite with a TextField, added to `Menu_mc`. It borrows the console history's font, size and color, so it also matches console reskins. It sits just above the console's background, at the right edge by default, or in a custom box set on a 1920 x 1080 screen and stretched to the real one.
 3. **Timing.** An SFSE permanent task checks every frame whether the console is open. Only while it is open, and only every `iRefreshFrames` frames, does it read the selection and update the panel.
 
 ## Address Library safety
@@ -69,7 +69,7 @@ Most new sections read fields straight from game memory, using CommonLibSF's map
 ## Requirements
 
 - SFSE and Address Library for SFSE Plugins.
-- Optional: OSF Settings 1.0 (for the in-game menu). Without it, the INI is used.
+- Optional: OSF Settings with placement controls, for the in-game menu (older versions reject the settings page). Without it, the INI is used.
 - To build: Visual Studio 2022 Build Tools (C++), XMake 3.0+ and Git.
 
 ## Build

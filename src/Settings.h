@@ -2,6 +2,14 @@
 
 namespace MIC
 {
+	// Where the panel goes: beside the console, or in a box set on a 1920 x 1080 reference screen.
+	enum class PanelPosition : std::uint8_t
+	{
+		Right,
+		Left,
+		Custom
+	};
+
 	// All options. Values come from MoreInformativeConsoleSF.ini; when OSF Settings is installed,
 	// its menu values (Documents\My Games\Starfield\OSF\Settings\moreinformativeconsole-sf.json)
 	// override the INI. Read and written on the game thread only.
@@ -14,7 +22,7 @@ namespace MIC
 		bool          debugLog{ false };
 
 		// Panel
-		bool          alignRight{ true };
+		PanelPosition position{ PanelPosition::Right };
 		bool          overConsole{ false };  // bottom-align with the console instead of sitting above it
 		double        maxHeightPercent{ 100.0 };  // of the screen height; taller text scrolls
 		bool          scrollWithMouse{ false };   // the mouse wheel scrolls the panel (it then takes mouse input)
@@ -31,6 +39,13 @@ namespace MIC
 		double        margin{ 16.0 };
 		double        offsetX{ 0.0 };
 		double        offsetY{ 0.0 };
+		// Custom position: the box the panel fits in, in units of a 1920 x 1080 screen (stretched to
+		// the real one). The panel is as tall as its text, up to the box's height, and keeps to the
+		// box's top edge in the upper half of the screen, or its bottom edge in the lower half.
+		double        boxLeft{ 1248.0 };
+		double        boxTop{ 32.0 };
+		double        boxWidth{ 640.0 };
+		double        boxHeight{ 640.0 };
 		std::uint32_t backgroundColor{ 0x000000 };
 		double        backgroundAlpha{ 0.65 };
 		std::uint32_t labelColor{ 0x9FB4C8 };

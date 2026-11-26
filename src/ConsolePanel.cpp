@@ -38,6 +38,7 @@ namespace MIC::ConsolePanel
 			double        layoutViewL{ 0.0 };
 			double        layoutViewT{ 0.0 };
 			double        layoutViewR{ 0.0 };
+			double        layoutViewB{ 0.0 };
 
 			// Scrolling: the panel is capped at the screen height and longer text scrolls.
 			RE::TESFormID shownID{ 0 };        // reference whose info is in the panel
@@ -270,7 +271,7 @@ namespace MIC::ConsolePanel
 
 			if (!a_textChanged && state.layoutValid && state.layoutVersion == settings.version &&
 				bx == state.layoutX && by == state.layoutY && bw == state.layoutW && bh == state.layoutH &&
-				viewL == state.layoutViewL && viewT == state.layoutViewT && viewR == state.layoutViewR) {
+				viewL == state.layoutViewL && viewT == state.layoutViewT && viewR == state.layoutViewR && viewB == state.layoutViewB) {
 				return;  // nothing that affects the layout changed
 			}
 			state.layoutValid = true;
@@ -282,6 +283,7 @@ namespace MIC::ConsolePanel
 			state.layoutViewL = viewL;
 			state.layoutViewT = viewT;
 			state.layoutViewR = viewR;
+			state.layoutViewB = viewB;
 
 			// The part of the console that is on screen, inside the margins.
 			const double margin = settings.margin;
@@ -289,9 +291,20 @@ namespace MIC::ConsolePanel
 			const double right = std::min(bx + bw, viewR) - margin;
 			const double usable = std::max(120.0, right - left);
 
+			// A custom box is set on a 1920 x 1080 screen and stretched to the real one. It needs the
+			// screen's edges; without them the panel stays beside the console.
+			const bool screenKnown = viewL > -1.0e8 && viewT > -1.0e8 && viewR < 1.0e8 && viewB < 1.0e8;
+			const bool custom = settings.position == PanelPosition::Custom && screenKnown;
+			const double kx = (viewR - viewL) / 1920.0;
+			const double ky = (viewB - viewT) / 1080.0;
+			const double boxL = custom ? viewL + settings.boxLeft * kx : 0.0;
+			const double boxT = custom ? viewT + settings.boxTop * ky : 0.0;
+			const double boxW = custom ? std::max(60.0, settings.boxWidth * kx) : 0.0;
+			const double boxH = custom ? std::max(60.0, settings.boxHeight * ky) : 0.0;
+
 			// width/height are in the panel's own units; on screen they are multiplied by the scale.
 			const double scale = settings.panelScale > 0.0 ? settings.panelScale : 1.0;
-			const double screenWidth = std::clamp(usable * settings.widthPercent / 100.0, std::min(120.0, usable), usable);
+			const double screenWidth = custom ? boxW : std::clamp(usable * settings.widthPercent / 100.0, std::min(120.0, usable), usable);
 			const double width = screenWidth / scale;
 			Set(a_text, "width", Value(width - 2 * Padding()));
 			Set(a_text, "autoSize", Value("left"));  // measure the whole text first
@@ -303,9 +316,12 @@ namespace MIC::ConsolePanel
 			const double bottom = settings.overConsole ? std::min(by + bh, viewB) : by;
 
 			// Room for the panel: from the top of the screen down to its bottom, and at most the chosen
-			// share of the screen height. Longer text gets a fixed-height field, which scrolls.
+			// share of the screen height (or the custom box's height). Longer text gets a fixed-height
+			// field, which scrolls.
 			double room = bottom - margin - (viewT + margin);
-			if (viewT > -1.0e8 && viewB < 1.0e8) {
+			if (custom) {
+				room = boxH;
+			} else if (viewT > -1.0e8 && viewB < 1.0e8) {
 				room = std::min(room, (viewB - viewT) * settings.maxHeightPercent / 100.0 - 2 * margin);
 			}
 			const double maxText = room / scale - 2 * Padding();
@@ -323,15 +339,21 @@ namespace MIC::ConsolePanel
 			state.panelHeight = height;
 			DrawBackground(a_panel, a_text);
 
-			const double x = (settings.alignRight ? right - screenWidth : left) + settings.offsetX;
-			double       y = bottom - margin - screenHeight + settings.offsetY;
+			double x = (settings.position == PanelPosition::Left ? left : right - screenWidth) + settings.offsetX;
+			double y = bottom - margin - screenHeight + settings.offsetY;
 			y = std::max(y, viewT + margin);  // never above the top of the screen
+			if (custom) {
+				// Keep to the box edge nearer the top or bottom of the screen, and on screen.
+				x = std::clamp(boxL, viewL, std::max(viewL, viewR - screenWidth));
+				y = boxT + boxH / 2 < (viewT + viewB) / 2 ? boxT : boxT + boxH - screenHeight;
+				y = std::clamp(y, viewT, std::max(viewT, viewB - screenHeight));
+			}
 			Set(a_panel, "x", Value(x));
 			Set(a_panel, "y", Value(y));
 
 			if (settings.debugLog) {
-				REX::INFO("Layout: background x={} y={} w={} h={}; screen {}..{} x {}..{}; panel x={} y={} w={} h={} scale={}",
-					bx, by, bw, bh, viewL, viewR, viewT, viewB, x, y, screenWidth, screenHeight, scale);
+				REX::INFO("Layout: background x={} y={} w={} h={}; screen {}..{} x {}..{}; panel x={} y={} w={} h={} scale={}{}",
+					bx, by, bw, bh, viewL, viewR, viewT, viewB, x, y, screenWidth, screenHeight, scale, custom ? " (custom box)" : "");
 			}
 		}
 

@@ -13,7 +13,8 @@ namespace MIC
 			Double,
 			Color,   // INI: 0xRRGGBB; OSF: string "#RRGGBB"
 			String,
-			Align    // INI: bAlignRight 0/1; OSF: enum "left"/"right"
+			Align,    // INI: bAlignRight 0/1 (older INI files)
+			Position  // INI: sPosition right/left/custom; OSF: enum "right"/"left"/"custom"
 		};
 
 		struct Option
@@ -35,7 +36,12 @@ namespace MIC
 				{ "General", "iRefreshFrames", "refreshFrames", Kind::UInt, &s.refreshFrames, 1, 240 },
 				{ "General", "bDebugLog", "debugLog", Kind::Bool, &s.debugLog },
 
-				{ "Panel", "bAlignRight", "alignment", Kind::Align, &s.alignRight },
+				{ "Panel", "bAlignRight", nullptr, Kind::Align, &s.position },
+				{ "Panel", "sPosition", "alignment", Kind::Position, &s.position },
+				{ "Panel", "fBoxLeft", "boxLeft", Kind::Double, &s.boxLeft, 0.0, 1920.0 },
+				{ "Panel", "fBoxTop", "boxTop", Kind::Double, &s.boxTop, 0.0, 1080.0 },
+				{ "Panel", "fBoxWidth", "boxWidth", Kind::Double, &s.boxWidth, 120.0, 1920.0 },
+				{ "Panel", "fBoxHeight", "boxHeight", Kind::Double, &s.boxHeight, 60.0, 1080.0 },
 				{ "Panel", "bOverConsole", "overConsole", Kind::Bool, &s.overConsole },
 				{ "Panel", "fMaxHeightPercent", "maxHeightPercent", Kind::Double, &s.maxHeightPercent, 20.0, 100.0 },
 				{ "Panel", "bScrollWithMouse", "scrollWithMouse", Kind::Bool, &s.scrollWithMouse },
@@ -133,6 +139,15 @@ namespace MIC
 			return std::nullopt;
 		}
 
+		std::optional<PanelPosition> ParsePosition(const std::string& a_value)
+		{
+			const auto v = Lower(Trim(a_value));
+			if (v == "right") return PanelPosition::Right;
+			if (v == "left") return PanelPosition::Left;
+			if (v == "custom") return PanelPosition::Custom;
+			return std::nullopt;
+		}
+
 		std::optional<double> ParseDouble(const std::string& a_value)
 		{
 			try {
@@ -168,8 +183,13 @@ namespace MIC
 		{
 			switch (a_opt.kind) {
 			case Kind::Bool:
-			case Kind::Align:
 				if (const auto v = ParseBool(a_value)) *static_cast<bool*>(a_opt.target) = *v;
+				break;
+			case Kind::Align:
+				if (const auto v = ParseBool(a_value)) *static_cast<PanelPosition*>(a_opt.target) = *v ? PanelPosition::Right : PanelPosition::Left;
+				break;
+			case Kind::Position:
+				if (const auto v = ParsePosition(a_value)) *static_cast<PanelPosition*>(a_opt.target) = *v;
 				break;
 			case Kind::UInt:
 				if (const auto v = ParseDouble(a_value)) *static_cast<std::uint32_t*>(a_opt.target) = static_cast<std::uint32_t>(std::max(0.0, Clamp(a_opt, *v)));
@@ -301,10 +321,14 @@ namespace MIC
 						break;
 					}
 				case Kind::Align:
+					break;  // INI only
+				case Kind::Position:
 					{
 						std::string v;
 						status = client.GetEnum(OSF::kModID, opt.osfKey, v);
-						if (status == Status::Ok) *static_cast<bool*>(opt.target) = (v != "left");
+						if (status == Status::Ok) {
+							if (const auto p = ParsePosition(v)) *static_cast<PanelPosition*>(opt.target) = *p;
+						}
 						break;
 					}
 				}
@@ -326,8 +350,9 @@ namespace MIC
 		LoadOSF(*this);
 		version = keepVersion + 1;
 
-		REX::INFO("Settings loaded (v{}): panel={} print={} align={} width={}% scale={} font={} source={}",
-			version, showPanel, printToConsole, alignRight ? "right" : "left", widthPercent, panelScale, fontSize,
+		const char* where = position == PanelPosition::Custom ? "custom" : position == PanelPosition::Left ? "left" : "right";
+		REX::INFO("Settings loaded (v{}): panel={} print={} position={} width={}% box={},{} {}x{} scale={} font={} source={}",
+			version, showPanel, printToConsole, where, widthPercent, boxLeft, boxTop, boxWidth, boxHeight, panelScale, fontSize,
 			g_osfAvailable ? "INI + OSF Settings" : "INI");
 	}
 
