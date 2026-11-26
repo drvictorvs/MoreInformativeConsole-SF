@@ -27,6 +27,7 @@ namespace MIC::ConsolePanel
 			std::uint32_t appliedStyle{ 0 };  // Settings::version the panel was styled with
 			bool          loggedNoParse{ false };
 			bool          loggedNoBounds{ false };
+			bool          loggedNoScreen{ false };
 
 			// Last layout: redone only when the text, the console's position or the settings change,
 			// because setting the text field's width makes Scaleform re-lay out all of its text.
@@ -295,6 +296,11 @@ namespace MIC::ConsolePanel
 			// screen's edges; without them the panel stays beside the console.
 			const bool screenKnown = viewL > -1.0e8 && viewT > -1.0e8 && viewR < 1.0e8 && viewB < 1.0e8;
 			const bool custom = settings.position == PanelPosition::Custom && screenKnown;
+			if (settings.position == PanelPosition::Custom && !screenKnown && !state.loggedNoScreen) {
+				state.loggedNoScreen = true;
+				REX::WARN("Custom box: could not read the screen's edges (left {}, top {}, right {}, bottom {}); the panel stays beside the console",
+					viewL, viewT, viewR, viewB);
+			}
 			const double kx = (viewR - viewL) / 1920.0;
 			const double ky = (viewB - viewT) / 1080.0;
 			const double boxL = custom ? viewL + settings.boxLeft * kx : 0.0;
