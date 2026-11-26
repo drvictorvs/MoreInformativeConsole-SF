@@ -80,7 +80,7 @@ namespace MIC::GameID
 	// void (const u32* styleHandle, const HighlightStyle*): rewrites a style (the scanner does it every
 	// frame to pulse its outlines).
 	inline constexpr REL::ID HighlightStyle_Set{ 48700 };
-	// bool (LocalFunction* visitor, NiAVObject* root): calls the visitor (vtable slot 1) for each leaf
+	// bool (LocalFunction* visitor, NiAVObject* root): calls the visitor (vtable slot 2) for each leaf
 	// under root, holding a reference to each node while it walks.
 	inline constexpr REL::ID NiAVObject_VisitLeaves{ 126922 };
 	// The visitor the inventory 3D code (ID 43205) uses to put an object under a HighlightManager:
