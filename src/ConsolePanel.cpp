@@ -25,7 +25,6 @@ namespace MIC::ConsolePanel
 			RE::TESFormID lastPrintedID{ 0 };
 			std::string   lastHTML;
 			std::uint32_t appliedStyle{ 0 };  // Settings::version the panel was styled with
-			std::uint32_t highlightVersion{ 0 };  // Settings::version the selection highlight was set from
 			bool          loggedNoParse{ false };
 			bool          loggedNoBounds{ false };
 
@@ -398,6 +397,9 @@ namespace MIC::ConsolePanel
 				PrintToConsole(id, ref);
 			}
 
+			// Independent of the panel: also while it's hidden or turned off.
+			Highlight::Show(ref);
+
 			if (!settings.showPanel || state.hidden) {
 				HideExistingPanel(console);  // off, or hidden with the show/hide key
 				return;
@@ -560,11 +562,6 @@ namespace MIC::ConsolePanel
 		if (OSF::ConsumeChanged()) {
 			Settings::Get().Load();
 		}
-		// The selection highlight applies with the console closed too, so it's set here, not below.
-		if (state.highlightVersion != Settings::Get().version) {
-			state.highlightVersion = Settings::Get().version;
-			Highlight::Apply();
-		}
 
 		auto* ui = RE::UI::GetSingleton();
 		if (!ui) {
@@ -573,6 +570,7 @@ namespace MIC::ConsolePanel
 		static const RE::BSFixedString consoleName{ "Console" };
 		if (!ui->IsMenuOpen(consoleName)) {
 			state.lastPrintedID = 0;  // print again for the same reference after reopening
+			Highlight::Hide();        // shown again on the first refresh after reopening
 			return;
 		}
 		const auto& settings = Settings::Get();

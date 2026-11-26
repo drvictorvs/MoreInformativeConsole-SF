@@ -41,9 +41,11 @@
     ],
     "Selection highlight": [
       { "key": "highlightSelection", "type": "bool", "label": "Highlight the selected reference", "default": true,
-        "hint": "Uses the game's own console selection highlight. A new color shows from the next reference you select. Off leaves the game's setting alone." },
-      { "key": "highlight", "type": "color", "label": "Highlight", "default": "#F2C14EFF", "alpha": true,
-        "hint": "Color and opacity of the highlight." }
+        "hint": "While the console is open, with the color fill and outline of the hand scanner and outpost building." },
+      { "key": "highlight", "type": "color", "label": "Highlight", "default": "#F2C14E80", "alpha": true,
+        "hint": "Color of the highlight; its opacity is the fill's (0 leaves only the outline)." },
+      { "key": "highlightOutline", "type": "float", "label": "Outline thickness", "default": 1.0, "min": 0.0, "max": 10.0, "step": 0.25,
+        "hint": "0 leaves only the fill. The game's own highlights use 1." }
     ],
     "Sections": [
       { "key": "showReference", "type": "bool", "label": "Reference", "default": true },

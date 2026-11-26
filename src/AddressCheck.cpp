@@ -176,8 +176,11 @@ namespace MIC::Address
 				{ GameID::GetModelMaterialSwaps, "GetModelMaterialSwaps (found for this mod)" },
 			});
 			f.selectionHighlight = CheckGroup("Selection highlight", {
-				{ GameID::aConsoleSelectedRefColor, "aConsoleSelectedRefColor:Menu value (found for this mod)" },
-				{ GameID::aConsoleSelectedRefColor_Key, "aConsoleSelectedRefColor:Menu name (found for this mod)" },
+				{ GameID::HighlightManager_Ctor, "HighlightManager constructor (found for this mod)" },
+				{ GameID::HighlightManager_Clear, "HighlightManager::Clear (found for this mod)" },
+				{ GameID::HighlightStyle_Set, "highlight style setter (found for this mod)" },
+				{ GameID::NiAVObject_VisitLeaves, "NiAVObject leaf visitor (found for this mod)" },
+				{ GameID::HighlightAddVisitor_VTable, "highlight visitor vtable (found for this mod)" },
 			});
 
 			if (!f.core) {
