@@ -2,7 +2,7 @@
 set_xmakever("3.0.0")
 
 set_project("MoreInformativeConsoleSF")
-set_version("1.5.0")
+set_version("1.4.0")
 set_license("GPL-3.0")
 
 set_arch("x64")
@@ -32,4 +32,16 @@ target("MoreInformativeConsoleSF", function()
 
     add_installfiles("dist/Data/SFSE/Plugins/MoreInformativeConsoleSF.ini", { prefixdir = "SFSE/Plugins" })
     add_installfiles("dist/Data/SFSE/Plugins/OSF/Settings/schemas/moreinformativeconsole-sf.json", { prefixdir = "SFSE/Plugins/OSF/Settings/schemas" })
+    
+    -- After each build, copy the plugin next to its INI in dist/, so dist/Data is the complete mod.
+    after_build(function(target)
+    local dir = path.join(os.projectdir(), "dist", "Data", "SFSE", "Plugins")
+    os.mkdir(dir)
+    os.cp(target:targetfile(), dir)
+    local pdb = target:symbolfile()
+    if pdb and os.isfile(pdb) then
+        os.cp(pdb, dir)
+    end
+    cprint("${dim}copied %s to %s", path.filename(target:targetfile()), path.relative(dir, os.projectdir()))
+end)
 end)
