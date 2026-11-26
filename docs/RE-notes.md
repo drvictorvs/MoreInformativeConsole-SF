@@ -121,12 +121,25 @@ Default objects are `BGSDefaultObject` (DFOB) forms whose editor ID is the defau
 
 ## Console selection highlight
 
+### The game's own (used by 1.4.0, replaced in 1.5.0)
+
 The game can already highlight the reference selected in the console; its color is the INI setting `aConsoleSelectedRefColor:Menu` (`[Menu]` section of Starfield.ini), default 0, i.e. transparent.
 
-- The setting is a static `SettingT<INISettingCollection>` (vtable ID 393317) in the console's group of `[Menu]` settings: object ID 830364, value at +8 (**830365**), key `const char*` at +0x18 (**830367**). `INISettingCollection::Singleton` is 944389.
-- The value is `0xAARRGGBB`: the same as the hex that `setini "aConsoleSelectedRefColor:Menu" FFC6331E` takes and `getini` prints. In the INI file it's written `r,g,b,a` in decimal.
-- The console's set-selected-reference function (ID 113588; `this`, new handle in edx, a bool in r8b; the current handle is at `this`+0x58) reads the value on every change. If the value is non-zero, it removes the old reference's highlight (through the handle it keeps at `this`+0x5C) and highlights the new reference's 3D. It unpacks the color with masks `0xFF0000`, `0xFF00`, `0xFF`, `0xFF000000` into floats R, G, B, A. With 0 it does neither: setting 0 while something is highlighted leaves that highlight on, so the mod writes 1 (transparent) instead.
-- So the color is taken at selection time: a change shows from the next selected reference.
+- The setting is a static `SettingT<INISettingCollection>` (vtable ID 393317): object ID 830364, value at +8 (830365, `0xAARRGGBB`, the hex `setini` takes), key `const char*` at +0x18 (830367). `INISettingCollection::Singleton` is 944389.
+- The console's set-selected-reference function (ID 113588; `this`, new handle in edx, a bool in r8b; the current handle is at `this`+0x58) reads it on every change. If it's non-zero, it calls ID 100069 `(manager ID 883606, NiAVObject* root, const float color[4])` for the old reference with the color saved at `this`+0x5C (cleared first, so 0: off) and for the new one with the setting's color.
+- 100069 queues (or, on the render thread, runs) a walk over the geometry that sets each instance's 8-bit RGBA "geometry instance highlight" (alpha 0 clears it; only while the byte at ID 935631 is set). Materials blend that color in themselves, so **in game it shows on some materials (a suit patch, the ground) and not others**: most of an NPC stays as it was.
+
+### The engine's object highlight (1.5.0)
+
+The fill and outline the hand scanner, outpost building and the crafting menus draw (render passes `HighlightMask`, `HighlightPrepare`, `GatherHighlights`, `Highlight`) are drawn over the object's shape whatever its materials. Each user owns a `HighlightManager`:
+
+- RTTI `.?AVHighlightManager@@`, vtable ID 400578 (only a destructor), 0x48 bytes: refcount +0x08, the set of geometry instances it highlighted at +0x18 (12-byte entries at +0x20, count +0x28), and the handle of its style in the renderer's style table at +0x40.
+- Constructor ID 48694 `(HighlightManager* storage, const Style*)`: allocates the style slot and copies the style. Each user creates its own: game init (ID 102619, from the `[Highlight]` defaults), the crafting menus (ID 95761, from the `:Crafting` settings), and IDs 97831, 97835 and 121562.
+- Style (copied as is, 0x20 bytes): fill `u32` +0x00 and outline `u32` +0x08, both `0xAARRGGBB` like the game's a-settings; outline thickness `float` +0x0C and hardness `float` +0x10; zeros elsewhere in every caller. Defaults: `fDefaultHighlightOutlineThickness` 1.0, `fDefaultHighlightOutlineHardness` 0.1 (value ID 820783). The weapon workbench uses fill `40B3552C` and outline `FFB3552C` (`aHighlightWeapons*Color:Crafting`).
+- ID 48700 `(const u32* styleHandle, const Style*)` rewrites a style (the scanner does it every frame to pulse its outlines).
+- To highlight an object, walk its 3D with ID 126922 `bool (LocalFunction* visitor, NiAVObject* root)` (calls the visitor's slot 1/2 for each leaf, holding a reference to each node) and the visitor whose vtable is ID 400574: `{ vtable; Context* }`, `Context { HighlightManager*; u32 styleHandle }`. For each geometry (leaf vtable +0x50 = as-geometry; instance handle at geometry +0x1F0) it sets the instance's style (ID 48702) and adds the instance to the manager's set, so walking the same 3D again is harmless. The crafting menu (ID 97833) and others use exactly this; ID 400572 is the matching remove visitor (`Context { HighlightManager* }`).
+- ID 48696 `void (HighlightManager*)` takes the highlight off every instance in the set (checking each handle is still alive) and empties it.
+- `TESObjectREFR` vtable slot 0xAC returns the reference's 3D as an `NiPointer<NiAVObject>` through a hidden pointer.
 
 ## Contributing to CommonLibSF
 

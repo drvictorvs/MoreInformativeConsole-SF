@@ -29,7 +29,7 @@ namespace MIC::Address
 		bool materialSwaps{ false }; // GameIDs.h material swap lookup
 		bool editorIDs{ false };     // GameIDs.h editor ID map: editor IDs for factions and packages
 		bool lookupByEditorID{ false };  // TESForm::LookupByEditorID: actor values named in the settings
-		bool selectionHighlight{ false };  // GameIDs.h console highlight color setting
+		bool selectionHighlight{ false };  // GameIDs.h engine highlight (HighlightManager)
 	};
 
 	// Runs the check the first time; afterwards returns the cached result.

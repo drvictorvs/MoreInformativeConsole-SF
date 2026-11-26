@@ -60,6 +60,7 @@ namespace MIC
 				{ "Highlight", "bHighlightSelection", "highlightSelection", Kind::Bool, &s.highlightSelection },
 				{ "Highlight", "iHighlightColor", "highlightColor", Kind::Color, &s.highlightColor },
 				{ "Highlight", "fHighlightAlpha", "highlightOpacity", Kind::Double, &s.highlightAlpha, 0, 1 },
+				{ "Highlight", "fHighlightOutline", "highlightOutline", Kind::Double, &s.highlightOutline, 0, 10 },
 
 				{ "Content", "bShowReference", "showReference", Kind::Bool, &s.showReference },
 				{ "Content", "bShowBase", "showBase", Kind::Bool, &s.showBase },

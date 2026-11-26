@@ -55,15 +55,40 @@ namespace MIC::GameID
 	//   +0x18 capacity (power of two)   +0x30 BSReadWriteLock
 	inline constexpr REL::ID EditorIDMap{ 883342 };
 
-	// Console selection highlight: the "aConsoleSelectedRefColor:Menu" INI setting
-	// (SettingT<INISettingCollection>, object ID 830364; value at +8, key at +0x18). The value is
-	// 0xAARRGGBB, the same as `setini "aConsoleSelectedRefColor:Menu" AARRGGBB` (the INI file takes
-	// r,g,b,a). Default 0. The console's set-selected-reference function (ID 113588; the selected
-	// handle is at +0x58 of its object) reads it on each change: if it's non-zero, it removes the
-	// highlight from the previous reference and highlights the new one in that color, unpacked as
-	// R = bits 16-23, G = 8-15, B = 0-7, A = 24-31. With 0 it does neither.
-	inline constexpr REL::ID aConsoleSelectedRefColor{ 830365 };      // std::uint32_t
-	inline constexpr REL::ID aConsoleSelectedRefColor_Key{ 830367 };  // const char*
+	// The engine's object highlight: the fill and outline the hand scanner, outpost/workshop mode and the
+	// crafting menus draw (render passes "HighlightMask", "GatherHighlights"). Each user owns a
+	// HighlightManager (RTTI .?AVHighlightManager@@, vtable ID 400578, 0x48 bytes): refcount +0x08, the
+	// set of geometry instances it highlighted +0x18 (12-byte entries at +0x20, count +0x28), and the
+	// handle of its style in the renderer's style table +0x40. See docs/RE-notes.md.
+	struct HighlightStyle  // copied as is into the renderer's style table
+	{
+		std::uint32_t fill;       // 0xAARRGGBB, like the game's a-settings
+		std::uint32_t unk04;      // 0 in every caller
+		std::uint32_t outline;    // 0xAARRGGBB
+		float         thickness;  // outline
+		float         hardness;   // outline
+		std::uint32_t unk14[3];   // 0
+	};
+	static_assert(sizeof(HighlightStyle) == 0x20);
+	inline constexpr std::size_t kHighlightManagerSize = 0x48;
+	inline constexpr std::size_t kHighlightManager_Style = 0x40;  // u32 style handle
+
+	// HighlightManager* (HighlightManager* storage, const HighlightStyle*): allocates the style slot.
+	inline constexpr REL::ID HighlightManager_Ctor{ 48694 };
+	// void (HighlightManager*): takes the highlight off every instance in its set and empties it.
+	inline constexpr REL::ID HighlightManager_Clear{ 48696 };
+	// void (const u32* styleHandle, const HighlightStyle*): rewrites a style (the scanner does it every
+	// frame to pulse its outlines).
+	inline constexpr REL::ID HighlightStyle_Set{ 48700 };
+	// bool (LocalFunction* visitor, NiAVObject* root): calls the visitor (vtable slot 1) for each leaf
+	// under root, holding a reference to each node while it walks.
+	inline constexpr REL::ID NiAVObject_VisitLeaves{ 126922 };
+	// The visitor the inventory 3D code (ID 43205) uses to put an object under a HighlightManager:
+	// { vtable; Context* } with Context { HighlightManager*; u32 styleHandle }. For each geometry it sets
+	// the instance's style (ID 48702) and adds the instance to the manager's set.
+	inline constexpr REL::ID HighlightAddVisitor_VTable{ 400574 };
+	// "[Highlight]" game settings (value IDs): fDefaultHighlightOutlineHardness, default 0.1.
+	inline constexpr REL::ID fDefaultHighlightOutlineHardness{ 820783 };
 
 	// Layouts confirmed on 1.16.244. CommonLibSF's compiled layout agrees (its offset comments are
 	// stale), except that its biped slot mask is 32-bit; the game's is 64-bit. Read only through SafeMemory.

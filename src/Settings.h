@@ -36,10 +36,12 @@ namespace MIC
 		std::uint32_t labelColor{ 0x9FB4C8 };
 		std::uint32_t headerColor{ 0xF2C14E };
 
-		// Selection highlight: the game's own highlight for the reference selected in the console
+		// Selection highlight: the engine's object highlight (fill and outline) on the reference
+		// selected in the console, while the console is open
 		bool          highlightSelection{ true };
 		std::uint32_t highlightColor{ 0xF2C14E };
-		double        highlightAlpha{ 1.0 };
+		double        highlightAlpha{ 0.5 };    // fill opacity, 0-1
+		double        highlightOutline{ 1.0 };  // outline thickness; 0 = no outline
 
 		// Sections
 		bool          showReference{ true };
